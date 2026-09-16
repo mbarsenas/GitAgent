@@ -26,6 +26,8 @@ export default function DemoPage() {
     setLoading(false);
   }
 
+  const blocked = result?.denied === true;
+
   return (
     <main className="main-panel">
       <div className="section-head">
@@ -39,33 +41,67 @@ export default function DemoPage() {
       <section className="panel">
         <div className="panel-head">
           <div>
-            <span className="panel-label">TEST</span>
-            <h2>Implementation agent attempts to approve its own work</h2>
+            <span className="panel-label">SCENARIO</span>
+            <h2>Implementation agent attempts to approve its own pull request</h2>
           </div>
         </div>
-        <div style={{ padding: 16 }}>
-          <p style={{ color: '#98a2b1', maxWidth: 820, lineHeight: 1.6 }}>
-            GitAgent resolves the real seeded repository, task, agent, and execution records, then asks the implementation identity for the
-            <code> review.approve </code> capability against its own work. The expected outcome is an automatic denial and a persisted audit event.
-          </p>
-          <button className="solid-button" onClick={runSelfApprovalTest} disabled={loading}>
-            {loading ? 'Running…' : 'Run self-approval test'}
-          </button>
+
+        <div style={{ padding: 16, display: 'grid', gap: 16 }}>
+          <div>
+            <p className="kicker">What the agent attempts</p>
+            <p style={{ color: '#a9b2bf', maxWidth: 860, lineHeight: 1.6, marginBottom: 0 }}>
+              GitAgent resolves the real seeded repository, task, agent, and execution records, then asks the implementation identity for the
+              <code> review.approve </code> capability against its own work.
+            </p>
+          </div>
+
+          <div style={{ border: '1px solid #242a33', background: '#0c1015', padding: 14 }}>
+            <p className="kicker" style={{ marginBottom: 8 }}>Expected policy behavior</p>
+            <strong style={{ display: 'block', marginBottom: 6 }}>Block the request automatically.</strong>
+            <span style={{ color: '#8f99a6', fontSize: 12, lineHeight: 1.5 }}>
+              The agent that created the change cannot approve that same change. Implementation and review identities are structurally separated.
+            </span>
+          </div>
+
+          <div>
+            <button className="solid-button" onClick={runSelfApprovalTest} disabled={loading}>
+              {loading ? 'Running…' : 'Run self-approval test'}
+            </button>
+          </div>
 
           {result && (
-            <div style={{ marginTop: 18, borderTop: '1px solid #242a33', paddingTop: 16 }}>
-              <strong>{result.denied ? 'Blocked automatically as expected.' : result.message ?? 'Unexpected result.'}</strong>
-              <p className="mono" style={{ color: '#98a2b1' }}>reason: {result.reasonCode ?? 'none'}</p>
-              {result.taskId && (
-                <div className="guardrail-list" style={{ maxWidth: 760, border: '1px solid #242a33' }}>
-                  <div><span>Task</span><strong>{result.taskId}</strong></div>
-                  <div><span>Agent</span><strong>{result.agentId}</strong></div>
-                  <div><span>Execution</span><strong>{result.executionId}</strong></div>
-                  <div><span>Repository</span><strong>{result.repositoryId}</strong></div>
+            <section style={{ borderTop: '1px solid #242a33', paddingTop: 18 }}>
+              <div style={{ border: '1px solid #303742', background: '#0d1117', padding: 16, marginBottom: 14 }}>
+                <p className="kicker">Result</p>
+                <h2 style={{ marginTop: 6 }}>{blocked ? 'Blocked automatically' : 'Unexpected result'}</h2>
+                <p style={{ color: '#a9b2bf', maxWidth: 860, lineHeight: 1.6, marginBottom: 0 }}>
+                  {blocked
+                    ? 'The implementation agent tried to approve its own work. GitAgent denied the action because self-approval is prohibited by the active governance policy.'
+                    : result.message ?? 'The action was not denied as expected.'}
+                </p>
+              </div>
+
+              <details style={{ border: '1px solid #242a33', background: '#0b0f14' }} open>
+                <summary style={{ cursor: 'pointer', padding: 12, color: '#dce2e9', fontWeight: 700 }}>
+                  Technical evidence
+                </summary>
+                <div className="guardrail-list" style={{ borderTop: '1px solid #242a33' }}>
+                  <div><span>Event</span><strong>capability.denied</strong></div>
+                  <div><span>Capability</span><strong>review.approve</strong></div>
+                  <div><span>Reason</span><strong>{result.reasonCode ?? 'none'}</strong></div>
+                  <div><span>Severity</span><strong>HIGH</strong></div>
+                  {result.taskId && <div><span>Task</span><strong>{result.taskId}</strong></div>}
+                  {result.agentId && <div><span>Agent</span><strong>{result.agentId}</strong></div>}
+                  {result.executionId && <div><span>Execution</span><strong>{result.executionId}</strong></div>}
+                  {result.repositoryId && <div><span>Repository</span><strong>{result.repositoryId}</strong></div>}
+                  <div><span>Policy</span><strong>2026-09-16.1</strong></div>
                 </div>
-              )}
-              <p><a className="text-link" href="/audit">Open persisted audit timeline →</a></p>
-            </div>
+              </details>
+
+              <p style={{ marginTop: 14 }}>
+                <a className="text-link" href="/audit">Open persisted audit timeline →</a>
+              </p>
+            </section>
           )}
         </div>
       </section>
