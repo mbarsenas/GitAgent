@@ -1,6 +1,6 @@
 # Agent Trust Lifecycle
 
-GitAgent trust is dynamic, scoped, and reversible. An agent is never permanently trusted merely because a human sponsored it once.
+GitAgent trust is dynamic, scoped, reversible, and explainable. An agent is never permanently trusted merely because a human sponsored it once.
 
 ## Design principles
 
@@ -18,6 +18,11 @@ GitAgent trust is dynamic, scoped, and reversible. An agent is never permanently
 4. **Implementation and review identities are independent**
    - A coding agent cannot approve its own work.
    - Review agents operate under separate identities and permissions.
+
+5. **Policy is opinionated by default and configurable by design**
+   - GitAgent ships with a safe baseline policy so customers do not have to invent thresholds before first use.
+   - Organizations may override thresholds, windows, and actions through versioned policy configuration.
+   - Every decision records the effective policy version and the exact rule that fired.
 
 ## Trust states
 
@@ -113,14 +118,33 @@ Examples include:
 These paths are intentionally asymmetric.
 
 ### Restricted -> Trusted for Task
-Restriction may clear automatically when a policy-defined rehabilitation condition is met, for example:
-- N clean tasks completed under restricted scope
-- no medium/high/critical findings during the rehabilitation window
-- all required tests pass
-- no human override, revert, or policy violation
-- cost/rate behavior remains within limits
+Restriction may clear automatically when a policy-defined rehabilitation condition is met.
 
-Automatic widening must remain bounded and auditable. It may restore the prior task-scoped capability set, but it must not grant a new sensitive capability such as merge, secrets, or production deployment.
+The MVP ships with a default rehabilitation policy, but all values are configurable and versioned:
+- `required_clean_runs: 5`
+- `evaluation_window_runs: 8`
+- `max_medium_findings: 0`
+- `max_high_findings: 0`
+- `max_critical_findings: 0`
+- `require_all_mandatory_tests_pass: true`
+- `allow_human_override_during_window: false`
+- `allow_revert_during_window: false`
+- `allow_policy_violation_during_window: false`
+- `reset_on_substantive_violation: true`
+
+A **clean run** means all of the following are true:
+1. the task completes under the current restricted capability envelope;
+2. all mandatory tests and policy checks pass;
+3. there are no medium, high, or critical review findings;
+4. there is no human rejection or override;
+5. there is no revert/rollback caused by the task;
+6. there is no policy violation or forbidden-capability attempt;
+7. provenance/evidence requirements are complete;
+8. token, cost, retry, and concurrency behavior remains within policy bounds.
+
+By default, a substantive new violation during rehabilitation **resets the clean-run counter to zero**. A critical or security/policy violation may bypass reset and immediately quarantine the agent.
+
+Automatic widening remains bounded and auditable. It may restore the previous task-scoped capability envelope, but it must not grant new sensitive capabilities such as merge, secret access, or production deployment.
 
 ### Quarantined -> Reinstated or Revoked
 Quarantine never clears automatically in the MVP.
@@ -131,9 +155,30 @@ A human reviewer must decide one of:
 
 Reinstatement is not the mathematical inverse of quarantine. The reviewer must record the rationale and conditions for reinstatement.
 
-Minimum reinstatement decision record:
+## Quarantine review evidence package
+
+Human review must be evidence-driven, not a bare approve/deny prompt.
+
+The quarantine review screen must surface:
+- agent identity and provider/model
+- human sponsor / initiating actor
+- repository, branch, task, and issue references
+- current trust state and prior trust transitions
+- exact policy rule(s) that triggered quarantine
+- policy version in force at the time
+- typed findings and severity
+- attempted capabilities and denied capabilities
+- commands/tools executed
+- files read/changed
+- test and policy-check results
+- provenance/evidence package status
+- token, cost, retry, and concurrency telemetry
+- relevant PRs, review comments, reverts, and human overrides
+- recent task history and prior restrictions/quarantines
+- recommended resulting capability envelope if reinstated
+
+The reviewer decision record must include:
 - reviewer identity
-- triggering quarantine event(s)
 - evidence reviewed
 - decision rationale
 - resulting capability scope
@@ -187,21 +232,24 @@ GitAgent should avoid a single opaque "trust score" in early versions. Store exp
 
 Policy can later derive a score or tier from these transparent signals.
 
-## MVP rule model
+## Default MVP policy values
 
-The first trust engine is rule-based and explainable. Example defaults:
+GitAgent ships with an opinionated baseline so a first customer can enable governance without designing policy from scratch.
 
+Suggested defaults:
 - critical review finding -> quarantine
 - attempted forbidden capability -> quarantine
 - branch-protection bypass attempt -> quarantine
-- repeated high-severity rejection -> restrict or quarantine depending on policy
+- 2 high-severity trust findings in 10 runs -> quarantine
 - 3 substantive quality rejections in 10 runs -> restrict
-- minor/style-only rejections -> informational unless persistent beyond a separate threshold
-- repeated failed policy checks -> require human approval or restrict
-- clean restricted runs -> eligible for automatic return to Trusted for Task
+- minor/style-only rejections -> informational unless 5 occur in 10 runs
+- repeated failed policy checks -> require human approval, then restrict if repeated
+- 5 clean restricted runs within an 8-run window -> restore prior task-scoped trust
+- substantive violation while restricted -> reset clean-run counter
+- critical/security/policy violation while restricted -> quarantine
 - quarantined state -> human decision required; no automatic recovery
 
-All thresholds are versioned policy, not hard-coded product truth.
+These defaults are starting policy, not immutable product logic. Customers may tune them, but every override creates a new policy version so past decisions remain reproducible.
 
 ## MVP scope
 
@@ -227,11 +275,14 @@ At minimum:
 - trust.quarantined
 - trust.revoked
 - trust.reinstated
+- trust.rehabilitation_started
+- trust.rehabilitation_reset
 - trust.rehabilitation_completed
 - policy.violation
+- policy.rule_fired
 - review.finding
 - human.override
 - human.reinstatement_decision
 - execution.terminated
 
-Every event must identify the agent, task, repository, triggering evidence, policy version, and actor that caused the decision.
+Every event must identify the agent, task, repository, triggering evidence, policy version, exact rule identifier, and actor that caused the decision.
