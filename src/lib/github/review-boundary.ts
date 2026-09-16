@@ -1,22 +1,12 @@
 import { prisma } from '@/lib/db/prisma';
 import { createInstallationToken } from './auth';
+import { createReviewInstallationToken, isReviewAppConfigured } from './review-auth';
 
 const GITHUB_API = 'https://api.github.com';
 const API_VERSION = '2022-11-28';
 
 async function github<T>(url: string, token: string, init: RequestInit = {}): Promise<T> {
-  const response = await fetch(url, {
-    ...init,
-    cache: 'no-store',
-    headers: {
-      Accept: 'application/vnd.github+json',
-      Authorization: `Bearer ${token}`,
-      'X-GitHub-Api-Version': API_VERSION,
-      'User-Agent': 'GitAgent-Control',
-      'Content-Type': 'application/json',
-      ...init.headers,
-    },
-  });
+  const response = await fetch(url, { ...init, cache: 'no-store', headers: { Accept: 'application/vnd.github+json', Authorization: `Bearer ${token}`, 'X-GitHub-Api-Version': API_VERSION, 'User-Agent': 'GitAgent', 'Content-Type': 'application/json', ...init.headers } });
   if (!response.ok) throw new Error(`GitHub API ${response.status}: ${(await response.text()).slice(0, 500)}`);
   return (await response.json()) as T;
 }
@@ -28,7 +18,7 @@ export async function attemptPullRequestApproval(executionId: string, pullReques
   const repository = `${repo.owner}/${repo.name}`;
 
   if (actorAgentId === execution.agentId) {
-    await prisma.auditEvent.create({ data: { taskId: execution.taskId, executionId: execution.id, eventType: 'policy.review.denied', actorType: 'agent', actorId: actorAgentId, payload: { repository, pullRequestNumber, requestedCapability: 'review.approve', decision: 'DENY', policyVersion: '2026-09-16.1', reasonCode: 'policy.self_approval_denied', severity: 'high', implementationAgentId: execution.agentId, metadata: { explanation: 'GitAgent denied the approval because the requesting identity is the same implementation agent that produced the governed change.', githubRequestSent: false } } } });
+    await prisma.auditEvent.create({ data: { taskId: execution.taskId, executionId: execution.id, eventType: 'policy.review.denied', actorType: 'agent', actorId: actorAgentId, payload: { repository, pullRequestNumber, decision: 'DENY', reasonCode: 'policy.self_approval_denied', policyVersion: '2026-09-16.1', severity: 'high', metadata: { githubRequestSent: false } } } });
     return { allowed: false as const, decision: 'DENY', reasonCode: 'policy.self_approval_denied', githubRequestSent: false, message: 'Implementation agents cannot approve their own governed changes.' };
   }
 
@@ -38,15 +28,17 @@ export async function attemptPullRequestApproval(executionId: string, pullReques
   if (!grant) return { allowed: false as const, decision: 'DENY', reasonCode: 'policy.capability_not_granted', githubRequestSent: false };
 
   const priorReview = await prisma.auditEvent.findFirst({ where: { executionId: execution.id, actorId: actorAgentId, eventType: 'github.review.created' }, orderBy: { createdAt: 'desc' } });
-  const installation = await createInstallationToken();
-
   if (!priorReview) {
-    const review = await github<{ id: number; state: string; html_url: string }>(`${GITHUB_API}/repos/${repo.owner}/${repo.name}/pulls/${pullRequestNumber}/reviews`, installation.token, { method: 'POST', body: JSON.stringify({ event: 'COMMENT', body: `GitAgent independent review boundary passed. Reviewer identity: ${reviewer.name} (${reviewer.id}). This review identity is distinct from implementation agent ${execution.agentId}.` }) });
-    await prisma.auditEvent.create({ data: { taskId: execution.taskId, executionId: execution.id, eventType: 'github.review.created', actorType: 'agent', actorId: actorAgentId, payload: { repository, pullRequestNumber, githubReviewId: review.id, githubReviewState: review.state, githubReviewUrl: review.html_url, implementationAgentId: execution.agentId, reviewerAgentId: actorAgentId, capabilityGrantId: grant.id, installationTokenExpiresAt: installation.expires_at, decision: 'ALLOW', policyVersion: '2026-09-16.1', reasonCode: 'policy.independent_review_allowed', severity: 'info', metadata: { explanation: 'GitAgent authorized a separate logical review identity and created a non-approving GitHub review.', githubRequestSent: true, writableImplementationWorkspaceInherited: false } } } });
-    return { allowed: true as const, decision: 'ALLOW', reasonCode: 'policy.independent_review_allowed', githubRequestSent: true, githubReviewId: review.id, githubReviewState: review.state, githubReviewUrl: review.html_url, reviewerAgentId: actorAgentId, implementationAgentId: execution.agentId, capabilityGrantId: grant.id, approvalSubmitted: false };
+    const installation = await createInstallationToken();
+    const review = await github<{ id: number; state: string; html_url: string }>(`${GITHUB_API}/repos/${repo.owner}/${repo.name}/pulls/${pullRequestNumber}/reviews`, installation.token, { method: 'POST', body: JSON.stringify({ event: 'COMMENT', body: `GitAgent independent review boundary passed. Reviewer identity: ${reviewer.name} (${reviewer.id}).` }) });
+    await prisma.auditEvent.create({ data: { taskId: execution.taskId, executionId: execution.id, eventType: 'github.review.created', actorType: 'agent', actorId: actorAgentId, payload: { repository, pullRequestNumber, githubReviewId: review.id, githubReviewState: review.state, implementationAgentId: execution.agentId, reviewerAgentId: actorAgentId, capabilityGrantId: grant.id, decision: 'ALLOW', policyVersion: '2026-09-16.1', reasonCode: 'policy.independent_review_allowed' } } });
+    return { allowed: true as const, decision: 'ALLOW', reasonCode: 'policy.independent_review_allowed', githubRequestSent: true, githubReviewId: review.id, githubReviewState: review.state, approvalSubmitted: false };
   }
 
-  await prisma.auditEvent.create({ data: { taskId: execution.taskId, executionId: execution.id, eventType: 'policy.review.approval_blocked', actorType: 'system', actorId: 'gitagent', payload: { repository, pullRequestNumber, implementationAgentId: execution.agentId, reviewerAgentId: actorAgentId, capabilityGrantId: grant.id, decision: 'BLOCKED', policyVersion: '2026-09-16.1', reasonCode: 'github.same_app_identity_cannot_approve', severity: 'medium', metadata: { explanation: 'GitAgent uses one GitHub App installation identity for both logical agents in this MVP. GitHub therefore treats the review as coming from the same bot account that opened the pull request and rejects APPROVE. A separate GitHub credential principal is required for real approval.', githubRequestSent: false, requiresSeparateGitHubPrincipal: true } } } });
+  if (!isReviewAppConfigured()) return { allowed: true as const, decision: 'ALLOW', reasonCode: 'policy.independent_approval_allowed_but_review_app_not_configured', githubRequestSent: false, approvalSubmitted: false, requiresSeparateGitHubPrincipal: true };
 
-  return { allowed: true as const, decision: 'ALLOW', reasonCode: 'policy.independent_approval_allowed_but_github_identity_blocked', githubRequestSent: false, approvalSubmitted: false, requiresSeparateGitHubPrincipal: true, reviewerAgentId: actorAgentId, implementationAgentId: execution.agentId, capabilityGrantId: grant.id, message: 'GitAgent policy allows this independent reviewer, but GitHub will not accept APPROVE because both logical agents authenticate as the same GitHub App bot identity. Use a separate GitHub App or user/bot principal for the review credential.' };
+  const reviewInstallation = await createReviewInstallationToken();
+  const approval = await github<{ id: number; state: string; html_url: string }>(`${GITHUB_API}/repos/${repo.owner}/${repo.name}/pulls/${pullRequestNumber}/reviews`, reviewInstallation.token, { method: 'POST', body: JSON.stringify({ event: 'APPROVE', body: `GitAgent governed approval by independent review principal ${reviewInstallation.appSlug} for reviewer ${reviewer.name} (${reviewer.id}).` }) });
+  await prisma.auditEvent.create({ data: { taskId: execution.taskId, executionId: execution.id, eventType: 'github.review.approved', actorType: 'agent', actorId: actorAgentId, payload: { repository, pullRequestNumber, githubReviewId: approval.id, githubReviewState: approval.state, githubReviewUrl: approval.html_url, implementationAgentId: execution.agentId, reviewerAgentId: actorAgentId, reviewGitHubApp: reviewInstallation.appSlug, reviewInstallationId: reviewInstallation.installationId, capabilityGrantId: grant.id, installationTokenExpiresAt: reviewInstallation.expires_at, decision: 'ALLOW', policyVersion: '2026-09-16.1', reasonCode: 'policy.independent_approval_allowed', metadata: { githubRequestSent: true, separateGitHubPrincipal: true, writableImplementationWorkspaceInherited: false } } } });
+  return { allowed: true as const, decision: 'ALLOW', reasonCode: 'policy.independent_approval_allowed', githubRequestSent: true, approvalSubmitted: true, githubReviewId: approval.id, githubReviewState: approval.state, githubReviewUrl: approval.html_url, reviewGitHubApp: reviewInstallation.appSlug, reviewerAgentId: actorAgentId, implementationAgentId: execution.agentId, capabilityGrantId: grant.id };
 }
