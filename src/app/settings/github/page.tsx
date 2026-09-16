@@ -18,7 +18,7 @@ export default async function GitHubConnectionPage() {
   });
 
   const installationId = process.env.GITHUB_APP_INSTALLATION_ID ?? '';
-  const appSlug = process.env.GITHUB_APP_SLUG ?? 'gitagent';
+  const appSlug = process.env.GITHUB_APP_SLUG ?? 'gitagent-control';
   const connected = Boolean(installationId);
 
   return (
