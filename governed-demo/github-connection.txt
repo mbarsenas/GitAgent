@@ -1,0 +1,9 @@
+GitAgent governed GitHub integration demo.
+
+This file was created on a task-scoped branch to prove that GitAgent can perform a bounded repository write through the GitHub integration without writing directly to the default branch.
+
+Intended policy:
+- implementation identity may create branch
+- implementation identity may write assigned branch
+- implementation identity may open draft pull request
+- implementation identity may not approve or merge its own work
