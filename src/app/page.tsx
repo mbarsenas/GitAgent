@@ -49,7 +49,7 @@ export default function Home() {
         </div>
         <div className="chrome-actions">
           <a className="ghost-button" href="/demo">Run adversarial test</a>
-          <button className="solid-button">New task</button>
+          <a className="solid-button" href="/tasks/new">New task</a>
         </div>
       </header>
 
@@ -132,10 +132,10 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="task-empty">
+            <a className="task-empty" href="/tasks/new">
               <span className="prompt">+</span>
               <span>Create another governed agent task</span>
-            </div>
+            </a>
           </article>
 
           <article className="panel" id="agents">
