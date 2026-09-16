@@ -39,13 +39,46 @@ A human or policy authority has approved a bounded task. Sponsorship includes:
 The agent may execute the capabilities granted for the current task, such as creating a branch, modifying code, running tests, and opening a PR. This trust ends when the task ends or an invalidating event occurs.
 
 ### Restricted
-The agent retains limited read or diagnostic capabilities but loses write, PR, secret, or execution permissions.
+The agent remains active, but with a narrower capability envelope. Typical restrictions include read-only mode, lower concurrency, lower budget, mandatory human approval, or loss of branch/PR/secret/tool capabilities.
+
+Restricted is intentionally different from Quarantined: the agent can still perform bounded work.
 
 ### Quarantined
-All mutating capabilities are denied. Existing execution is paused or terminated. The agent may require human review before any future task.
+All mutating capabilities are denied. Existing execution is paused or terminated. Quarantine never self-clears.
+
+A quarantined agent requires explicit Human/Policy Review before it may execute again.
 
 ### Revoked
-The agent cannot execute within the affected scope until explicitly reinstated.
+The agent cannot execute within the affected scope until explicitly reinstated through a new approval decision.
+
+## Typed evidence and rejection reasons
+
+Trust policy must operate on typed evidence, not a flat rejection counter.
+
+A rejection or review outcome should carry at least:
+- evidence type
+- reason code
+- severity
+- source actor (human, review agent, policy engine, test runner)
+- repository/task scope
+- timestamp
+- policy version
+- supporting artifact or finding reference
+
+Example reason classes:
+- `quality.style`
+- `quality.missing_test`
+- `quality.incorrect_behavior`
+- `security.vulnerability`
+- `policy.forbidden_capability_attempt`
+- `policy.branch_protection_bypass`
+- `provenance.missing_evidence`
+- `provenance.inconsistent_evidence`
+- `behavior.spam_or_duplicate_submission`
+- `behavior.reviewer_evasion`
+- `runtime.abnormal_cost_or_token_usage`
+
+Policy evaluates type and severity together. Three minor style rejections must not be treated as equivalent to three security or policy violations.
 
 ## Promotion model
 
@@ -75,6 +108,38 @@ Examples include:
 - attempts to evade reviewer or branch protections
 - provenance/evidence package missing or inconsistent
 
+## Restricted recovery vs quarantine recovery
+
+These paths are intentionally asymmetric.
+
+### Restricted -> Trusted for Task
+Restriction may clear automatically when a policy-defined rehabilitation condition is met, for example:
+- N clean tasks completed under restricted scope
+- no medium/high/critical findings during the rehabilitation window
+- all required tests pass
+- no human override, revert, or policy violation
+- cost/rate behavior remains within limits
+
+Automatic widening must remain bounded and auditable. It may restore the prior task-scoped capability set, but it must not grant a new sensitive capability such as merge, secrets, or production deployment.
+
+### Quarantined -> Reinstated or Revoked
+Quarantine never clears automatically in the MVP.
+
+A human reviewer must decide one of:
+- **Reinstate**: permit future execution under an explicitly defined capability set, usually narrower than or equal to the prior scope.
+- **Revoke**: deny further execution in the affected scope.
+
+Reinstatement is not the mathematical inverse of quarantine. The reviewer must record the rationale and conditions for reinstatement.
+
+Minimum reinstatement decision record:
+- reviewer identity
+- triggering quarantine event(s)
+- evidence reviewed
+- decision rationale
+- resulting capability scope
+- expiration/review date
+- any required monitoring or approval conditions
+
 ## Feedback loop
 
 The review layer feeds the trust layer.
@@ -88,7 +153,7 @@ Branch / PR / Evidence
       v
 Independent Review Agent
       |
-      +--> findings severity
+      +--> typed findings + severity
       +--> policy violations
       +--> test quality
       +--> provenance quality
@@ -110,7 +175,7 @@ Human decisions also feed the trust evaluator. A human may override automated de
 
 GitAgent should avoid a single opaque "trust score" in early versions. Store explicit signals first:
 - tasks completed
-- tasks rejected
+- typed rejection reasons
 - review findings by severity
 - tests passed/failed
 - policy violations
@@ -122,16 +187,35 @@ GitAgent should avoid a single opaque "trust score" in early versions. Store exp
 
 Policy can later derive a score or tier from these transparent signals.
 
+## MVP rule model
+
+The first trust engine is rule-based and explainable. Example defaults:
+
+- critical review finding -> quarantine
+- attempted forbidden capability -> quarantine
+- branch-protection bypass attempt -> quarantine
+- repeated high-severity rejection -> restrict or quarantine depending on policy
+- 3 substantive quality rejections in 10 runs -> restrict
+- minor/style-only rejections -> informational unless persistent beyond a separate threshold
+- repeated failed policy checks -> require human approval or restrict
+- clean restricted runs -> eligible for automatic return to Trusted for Task
+- quarantined state -> human decision required; no automatic recovery
+
+All thresholds are versioned policy, not hard-coded product truth.
+
 ## MVP scope
 
-The MVP includes both the upward and downward paths:
+The MVP includes the full reversible lifecycle, not just the upward path:
 
 - untrusted -> sponsored -> trusted-for-task
 - trusted-for-task -> restricted
 - trusted-for-task -> quarantined
-- restricted/quarantined -> human review -> reinstated or revoked
+- restricted -> trusted-for-task via bounded policy-based rehabilitation
+- restricted -> quarantined if new severe evidence appears
+- quarantined -> human review -> reinstated or revoked
+- reinstated -> sponsored/trusted-for-task under explicit scope
 
-The first implementation does not require an advanced learned reputation model. Rule-based demotion and quarantine are sufficient for MVP, provided the underlying evidence and audit events are captured from day one.
+The first implementation does not require an advanced learned reputation model. Rule-based transitions are sufficient provided the underlying typed evidence and audit events are captured from day one.
 
 ## Required audit events
 
@@ -143,9 +227,11 @@ At minimum:
 - trust.quarantined
 - trust.revoked
 - trust.reinstated
+- trust.rehabilitation_completed
 - policy.violation
 - review.finding
 - human.override
+- human.reinstatement_decision
 - execution.terminated
 
 Every event must identify the agent, task, repository, triggering evidence, policy version, and actor that caused the decision.
