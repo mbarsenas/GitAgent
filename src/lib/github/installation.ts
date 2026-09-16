@@ -1,4 +1,4 @@
-import { getGitHubAppConfig } from './config';
+import { getGitHubAppConfig, isGitHubAppConfigured } from './config';
 
 export type GitHubInstallationState = {
   configured: boolean;
@@ -12,11 +12,11 @@ export type GitHubInstallationState = {
 
 export function getGitHubInstallationState(): GitHubInstallationState {
   const config = getGitHubAppConfig();
-  const appSlug = config.appSlug || 'gitagent';
+  const appSlug = config.appSlug || 'gitagent-control';
   const installationId = config.installationId;
 
   return {
-    configured: config.configured,
+    configured: isGitHubAppConfigured(config),
     installed: Boolean(installationId),
     appId: config.appId,
     appSlug,
