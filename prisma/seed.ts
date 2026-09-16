@@ -33,6 +33,24 @@ async function main() {
     },
   });
 
+  const capabilities = ['repository.read', 'branch.create', 'branch.write', 'pr.create'];
+  for (const capability of capabilities) {
+    const existing = await prisma.capabilityGrant.findFirst({
+      where: { agentId: agent.id, capability, resource: repository.id, effect: 'ALLOW' },
+    });
+    if (!existing) {
+      await prisma.capabilityGrant.create({
+        data: {
+          agentId: agent.id,
+          capability,
+          resource: repository.id,
+          effect: 'ALLOW',
+          conditions: { scope: 'demo-sponsored-task', repository: `${repository.owner}/${repository.name}` },
+        },
+      });
+    }
+  }
+
   const existingTask = await prisma.task.findFirst({
     where: {
       title: 'Demonstrate self-approval denial',
@@ -84,7 +102,7 @@ async function main() {
         reasonCode: 'policy.sponsorship_granted',
         severity: 'info',
         metadata: {
-          capabilityScope: ['repository.read', 'branch.create', 'branch.write', 'pr.create'],
+          capabilityScope: capabilities,
           explanation: 'A human sponsor allowed this implementation agent to work only within the assigned task scope.',
         },
       },
@@ -135,6 +153,7 @@ async function main() {
     agentId: agent.id,
     taskId: task.id,
     executionId: execution.id,
+    capabilities,
   });
 }
 
