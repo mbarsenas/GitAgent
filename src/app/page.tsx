@@ -5,7 +5,13 @@ const stats = [
   { label: 'Pending approvals', value: '0' },
 ];
 
-const nav = ['Repositories', 'Agents', 'Tasks', 'Approvals', 'Audit'];
+const nav = [
+  { label: 'Repositories', href: '#repositories' },
+  { label: 'Agents', href: '#agents' },
+  { label: 'Tasks', href: '#tasks' },
+  { label: 'Approvals', href: '#approvals' },
+  { label: 'Audit', href: '/audit' },
+];
 
 export default function Home() {
   return (
@@ -17,7 +23,7 @@ export default function Home() {
         </div>
         <nav>
           {nav.map((item) => (
-            <a key={item} href={`#${item.toLowerCase()}`}>{item}</a>
+            <a key={item.label} href={item.href}>{item.label}</a>
           ))}
         </nav>
         <div className="status">Control plane · MVP</div>
@@ -43,7 +49,7 @@ export default function Home() {
         </section>
 
         <section className="grid">
-          <article className="card">
+          <article className="card" id="tasks">
             <div className="card-heading">
               <div>
                 <p className="eyebrow">Execution</p>
@@ -73,6 +79,7 @@ export default function Home() {
           <p className="eyebrow">Core principle</p>
           <h2>AI agents are identities, not invisible automation.</h2>
           <p>Every execution links the human initiator, agent, model, repository, capabilities, budget, approvals, commands, changes, tests and resulting pull request into one auditable timeline.</p>
+          <p><a href="/audit">Open the persisted governance audit timeline →</a></p>
         </section>
       </section>
     </main>
