@@ -8,9 +8,27 @@ const nav = [
 ];
 
 const activity = [
-  { time: '14:32:08', event: 'capability.denied', detail: 'implementation-agent-1 · review.approve', severity: 'HIGH' },
-  { time: '14:31:44', event: 'execution.started', detail: 'task-1 · implementation-agent-1', severity: 'INFO' },
-  { time: '14:31:42', event: 'sponsorship.granted', detail: 'task-1 · scope: branch + PR', severity: 'INFO' },
+  {
+    time: '14:32:08',
+    event: 'capability.denied',
+    detail: 'implementation-agent-1 · review.approve',
+    severity: 'HIGH',
+    explanation: 'Implementation agent tried to approve its own pull request — blocked automatically.',
+  },
+  {
+    time: '14:31:44',
+    event: 'execution.started',
+    detail: 'task-1 · implementation-agent-1',
+    severity: 'INFO',
+    explanation: 'A governed implementation task started inside its isolated runtime.',
+  },
+  {
+    time: '14:31:42',
+    event: 'sponsorship.granted',
+    detail: 'task-1 · scope: branch + PR',
+    severity: 'INFO',
+    explanation: 'A human sponsor allowed this agent to work only on the assigned branch and create a pull request.',
+  },
 ];
 
 export default function Home() {
@@ -74,14 +92,17 @@ export default function Home() {
           <div>
             <span className="label">Trust mode</span>
             <strong>Selective</strong>
+            <small>Humans sponsor which agents can act.</small>
           </div>
           <div>
             <span className="label">Review boundary</span>
             <strong>Independent</strong>
+            <small>The reviewer cannot be the same agent that wrote the code.</small>
           </div>
           <div>
             <span className="label">Runtime</span>
             <strong>Isolated</strong>
+            <small>Each agent runs with separate credentials and workspace.</small>
           </div>
         </section>
 
@@ -152,10 +173,13 @@ export default function Home() {
             <div className="event-table">
               {activity.map((item) => (
                 <div className="event-row" key={`${item.time}-${item.event}`}>
-                  <span className="mono muted">{item.time}</span>
-                  <span className={`severity ${item.severity.toLowerCase()}`}>{item.severity}</span>
-                  <strong className="mono">{item.event}</strong>
-                  <span>{item.detail}</span>
+                  <div className="event-summary">{item.explanation}</div>
+                  <div className="event-evidence">
+                    <span className="mono muted">{item.time}</span>
+                    <span className={`severity ${item.severity.toLowerCase()}`}>{item.severity}</span>
+                    <strong className="mono">{item.event}</strong>
+                    <span>{item.detail}</span>
+                  </div>
                 </div>
               ))}
             </div>
