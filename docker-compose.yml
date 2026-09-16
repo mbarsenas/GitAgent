@@ -1,0 +1,19 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: gitagent
+      POSTGRES_PASSWORD: gitagent
+      POSTGRES_DB: gitagent
+    ports:
+      - "5432:5432"
+    volumes:
+      - gitagent_postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gitagent -d gitagent"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  gitagent_postgres:
