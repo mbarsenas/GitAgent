@@ -33,27 +33,102 @@ async function main() {
     },
   });
 
-  const task = await prisma.task.create({
-    data: {
+  const existingTask = await prisma.task.findFirst({
+    where: {
       title: 'Demonstrate self-approval denial',
-      goal: 'Attempt self-approval and verify GitAgent denies and audits the action.',
       repositoryId: repository.id,
       agentId: agent.id,
-      initiatorId: user.id,
-      maxCostUsd: 1,
-      maxTokens: 20000,
-      requiresHumanApproval: true,
     },
+    orderBy: { createdAt: 'desc' },
   });
 
-  const execution = await prisma.execution.create({
-    data: {
-      taskId: task.id,
-      agentId: agent.id,
-      providerKey: 'openai',
-      model: 'codex',
-    },
+  const task =
+    existingTask ??
+    (await prisma.task.create({
+      data: {
+        title: 'Demonstrate self-approval denial',
+        goal: 'Attempt self-approval and verify GitAgent denies and audits the action.',
+        repositoryId: repository.id,
+        agentId: agent.id,
+        initiatorId: user.id,
+        maxCostUsd: 1,
+        maxTokens: 20000,
+        requiresHumanApproval: true,
+      },
+    }));
+
+  const existingExecution = await prisma.execution.findFirst({
+    where: { taskId: task.id, agentId: agent.id },
+    orderBy: { createdAt: 'desc' },
   });
+
+  const execution =
+    existingExecution ??
+    (await prisma.execution.create({
+      data: {
+        taskId: task.id,
+        agentId: agent.id,
+        providerKey: 'openai',
+        model: 'codex',
+      },
+    }));
+
+  const auditSeedEvents = [
+    {
+      eventType: 'sponsorship.granted',
+      actorType: 'human',
+      actorId: user.id,
+      payload: {
+        repositoryId: repository.id,
+        policyVersion: '2026-09-16.1',
+        reasonCode: 'policy.sponsorship_granted',
+        severity: 'info',
+        metadata: {
+          capabilityScope: ['repository.read', 'branch.create', 'branch.write', 'pr.create'],
+          explanation: 'A human sponsor allowed this implementation agent to work only within the assigned task scope.',
+        },
+      },
+    },
+    {
+      eventType: 'execution.created',
+      actorType: 'system',
+      actorId: 'gitagent',
+      payload: {
+        repositoryId: repository.id,
+        policyVersion: '2026-09-16.1',
+        reasonCode: 'execution.created',
+        severity: 'info',
+        metadata: {
+          agentId: agent.id,
+          explanation: 'GitAgent created an isolated execution record for the sponsored task.',
+        },
+      },
+    },
+  ];
+
+  for (const event of auditSeedEvents) {
+    const exists = await prisma.auditEvent.findFirst({
+      where: {
+        taskId: task.id,
+        executionId: execution.id,
+        eventType: event.eventType,
+        actorId: event.actorId,
+      },
+    });
+
+    if (!exists) {
+      await prisma.auditEvent.create({
+        data: {
+          taskId: task.id,
+          executionId: execution.id,
+          eventType: event.eventType,
+          actorType: event.actorType,
+          actorId: event.actorId,
+          payload: event.payload,
+        },
+      });
+    }
+  }
 
   console.log({
     repositoryId: repository.id,
