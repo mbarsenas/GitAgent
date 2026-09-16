@@ -1,3 +1,5 @@
+import { prisma } from '@/lib/db/prisma';
+
 const nav = [
   { label: 'Overview', href: '/' },
   { label: 'Repositories', href: '#repositories' },
@@ -7,31 +9,45 @@ const nav = [
   { label: 'Audit', href: '/audit' },
 ];
 
-const activity = [
-  {
-    time: '14:32:08',
-    event: 'capability.denied',
-    detail: 'implementation-agent-1 · review.approve',
-    severity: 'HIGH',
-    explanation: 'Implementation agent tried to approve its own pull request — blocked automatically.',
-  },
-  {
-    time: '14:31:44',
-    event: 'execution.started',
-    detail: 'task-1 · implementation-agent-1',
-    severity: 'INFO',
-    explanation: 'A governed implementation task started inside its isolated runtime.',
-  },
-  {
-    time: '14:31:42',
-    event: 'sponsorship.granted',
-    detail: 'task-1 · scope: branch + PR',
-    severity: 'INFO',
-    explanation: 'A human sponsor allowed this agent to work only on the assigned branch and create a pull request.',
-  },
-];
+function explainEvent(eventType: string, payload: unknown) {
+  const data = (payload ?? {}) as Record<string, unknown>;
+  const metadata = (data.metadata ?? {}) as Record<string, unknown>;
+  const capability = typeof metadata.capability === 'string' ? metadata.capability : undefined;
+  const reasonCode = typeof data.reasonCode === 'string' ? data.reasonCode : undefined;
 
-export default function Home() {
+  if (eventType === 'capability.denied' && reasonCode === 'policy.self_approval_denied') {
+    return 'Implementation agent tried to approve its own pull request — blocked automatically.';
+  }
+  if (eventType === 'sponsorship.granted') {
+    return 'A human sponsor granted a bounded task-scoped capability envelope.';
+  }
+  if (eventType === 'execution.created') {
+    return 'GitAgent created an isolated execution record for a governed task.';
+  }
+  if (eventType === 'capability.allowed') {
+    return capability ? `GitAgent allowed ${capability} under the active policy.` : 'GitAgent allowed a governed capability.';
+  }
+  if (eventType === 'capability.denied') {
+    return capability ? `GitAgent blocked ${capability} under the active policy.` : 'GitAgent blocked a governed capability.';
+  }
+  return 'Governance event recorded by GitAgent.';
+}
+
+export default async function Home() {
+  const [repository, agents, tasks, approvals, auditEvents] = await Promise.all([
+    prisma.repository.findFirst({ orderBy: { createdAt: 'asc' } }),
+    prisma.agent.findMany({ where: { status: 'ACTIVE' }, orderBy: { createdAt: 'asc' }, take: 4 }),
+    prisma.task.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: 5,
+      include: { agent: true, executions: { orderBy: { createdAt: 'desc' }, take: 1 } },
+    }),
+    prisma.approval.count({ where: { status: 'PENDING' } }),
+    prisma.auditEvent.findMany({ orderBy: { createdAt: 'desc' }, take: 5 }),
+  ]);
+
+  const activeTaskCount = tasks.filter((task) => ['QUEUED', 'RUNNING', 'WAITING_APPROVAL'].includes(task.status)).length;
+
   return (
     <main className="workspace">
       <header className="chrome">
@@ -44,8 +60,8 @@ export default function Home() {
         </div>
         <div className="repo-context">
           <span className="muted">workspace</span>
-          <strong>mbarsenas / GitAgent</strong>
-          <span className="branch">main</span>
+          <strong>{repository ? `${repository.owner} / ${repository.name}` : 'No repository connected'}</strong>
+          <span className="branch">{repository?.defaultBranch ?? '—'}</span>
         </div>
         <div className="chrome-actions">
           <a className="ghost-button" href="/demo">Run adversarial test</a>
@@ -83,11 +99,11 @@ export default function Home() {
         <section className="command-strip">
           <div>
             <span className="label">Repository</span>
-            <strong>GitAgent</strong>
+            <strong>{repository?.name ?? 'None'}</strong>
           </div>
           <div>
             <span className="label">Default branch</span>
-            <strong>main</strong>
+            <strong>{repository?.defaultBranch ?? '—'}</strong>
           </div>
           <div>
             <span className="label">Trust mode</span>
@@ -113,24 +129,36 @@ export default function Home() {
                 <span className="panel-label">TASKS</span>
                 <h2>Execution queue</h2>
               </div>
-              <span className="counter">1 active</span>
+              <span className="counter">{activeTaskCount} active</span>
             </div>
 
-            <div className="task-row">
-              <div className="task-state running">RUNNING</div>
-              <div className="task-main">
-                <strong>task-1 · adversarial governance test</strong>
-                <span>implementation-agent-1 · OpenAI/Codex · branch scope only</span>
-              </div>
-              <div className="task-metric">
-                <span>Budget</span>
-                <strong>$0.24 / $1.00</strong>
-              </div>
-              <div className="task-metric">
-                <span>Elapsed</span>
-                <strong>00:02:14</strong>
-              </div>
-            </div>
+            {tasks.length === 0 ? (
+              <a className="task-empty" href="/tasks/new">
+                <span className="prompt">+</span>
+                <span>Create your first governed agent task</span>
+              </a>
+            ) : (
+              tasks.map((task) => {
+                const execution = task.executions[0];
+                return (
+                  <div className="task-row" key={task.id}>
+                    <div className={`task-state ${task.status === 'RUNNING' ? 'running' : ''}`}>{task.status}</div>
+                    <div className="task-main">
+                      <strong>{task.title}</strong>
+                      <span>{task.agent?.name ?? 'Unassigned agent'} · {execution ? `${execution.providerKey}/${execution.model}` : 'No execution yet'}</span>
+                    </div>
+                    <div className="task-metric">
+                      <span>Budget</span>
+                      <strong>{task.maxCostUsd ? `$${Number(task.maxCostUsd).toFixed(2)}` : '—'}</strong>
+                    </div>
+                    <div className="task-metric">
+                      <span>Execution</span>
+                      <strong>{execution?.status ?? 'PENDING'}</strong>
+                    </div>
+                  </div>
+                );
+              })
+            )}
 
             <a className="task-empty" href="/tasks/new">
               <span className="prompt">+</span>
@@ -145,21 +173,20 @@ export default function Home() {
                 <h2>Identity boundary</h2>
               </div>
             </div>
-            <div className="identity-row">
-              <span className="avatar impl">I</span>
-              <div>
-                <strong>implementation-agent-1</strong>
-                <span>write branch · create PR</span>
-              </div>
-            </div>
-            <div className="identity-row">
-              <span className="avatar review">R</span>
-              <div>
-                <strong>review-agent-1</strong>
-                <span>read diff · approve/deny</span>
-              </div>
-            </div>
-            <div className="separation-rule">Credentials and workspaces are isolated.</div>
+            {agents.length === 0 ? (
+              <div className="separation-rule">No active agents yet.</div>
+            ) : (
+              agents.map((agent, index) => (
+                <div className="identity-row" key={agent.id}>
+                  <span className={`avatar ${index === 0 ? 'impl' : 'review'}`}>{agent.name.slice(0, 1).toUpperCase()}</span>
+                  <div>
+                    <strong>{agent.name}</strong>
+                    <span>{agent.providerKey}/{agent.model} · {agent.status.toLowerCase()}</span>
+                  </div>
+                </div>
+              ))
+            )}
+            <div className="separation-rule">Implementation and review identities use separate credentials and workspaces.</div>
           </article>
 
           <article className="panel span-2" id="audit">
@@ -171,17 +198,27 @@ export default function Home() {
               <a className="text-link" href="/audit">Open timeline →</a>
             </div>
             <div className="event-table">
-              {activity.map((item) => (
-                <div className="event-row" key={`${item.time}-${item.event}`}>
-                  <div className="event-summary">{item.explanation}</div>
-                  <div className="event-evidence">
-                    <span className="mono muted">{item.time}</span>
-                    <span className={`severity ${item.severity.toLowerCase()}`}>{item.severity}</span>
-                    <strong className="mono">{item.event}</strong>
-                    <span>{item.detail}</span>
-                  </div>
-                </div>
-              ))}
+              {auditEvents.length === 0 ? (
+                <div className="separation-rule">No audit events yet.</div>
+              ) : (
+                auditEvents.map((item) => {
+                  const payload = (item.payload ?? {}) as Record<string, unknown>;
+                  const metadata = (payload.metadata ?? {}) as Record<string, unknown>;
+                  const severity = typeof payload.severity === 'string' ? payload.severity.toUpperCase() : 'INFO';
+                  const capability = typeof metadata.capability === 'string' ? metadata.capability : '';
+                  return (
+                    <div className="event-row" key={item.id}>
+                      <div className="event-summary">{explainEvent(item.eventType, item.payload)}</div>
+                      <div className="event-evidence">
+                        <span className="mono muted">{item.createdAt.toISOString().slice(11, 19)}</span>
+                        <span className={`severity ${severity.toLowerCase()}`}>{severity}</span>
+                        <strong className="mono">{item.eventType}</strong>
+                        <span>{item.actorId ?? item.actorType}{capability ? ` · ${capability}` : ''}</span>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
             </div>
           </article>
 
@@ -191,6 +228,7 @@ export default function Home() {
                 <span className="panel-label">POLICY</span>
                 <h2>Guardrails</h2>
               </div>
+              <span className="counter">{approvals} pending</span>
             </div>
             <div className="guardrail-list">
               <div><span>Self approval</span><strong className="deny">DENY</strong></div>
