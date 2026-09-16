@@ -7,6 +7,7 @@ const nav = [
   { label: 'Tasks', href: '#tasks' },
   { label: 'Approvals', href: '#approvals' },
   { label: 'Audit', href: '/audit' },
+  { label: 'GitHub', href: '/settings/github' },
 ];
 
 function explainEvent(eventType: string, payload: unknown) {
@@ -30,6 +31,9 @@ function explainEvent(eventType: string, payload: unknown) {
   if (eventType === 'capability.denied') {
     return capability ? `GitAgent blocked ${capability} under the active policy.` : 'GitAgent blocked a governed capability.';
   }
+  if (eventType === 'github.branch.created') return 'GitAgent created a governed GitHub branch.';
+  if (eventType === 'github.commit.created') return 'GitAgent committed a governed repository change.';
+  if (eventType === 'github.pr.created') return 'GitAgent opened a governed draft pull request.';
   return 'Governance event recorded by GitAgent.';
 }
 
@@ -64,6 +68,7 @@ export default async function Home() {
           <span className="branch">{repository?.defaultBranch ?? '—'}</span>
         </div>
         <div className="chrome-actions">
+          <a className="ghost-button" href="/settings/github">GitHub connection</a>
           <a className="ghost-button" href="/demo">Run adversarial test</a>
           <a className="solid-button" href="/tasks/new">New task</a>
         </div>
@@ -73,7 +78,7 @@ export default async function Home() {
         <nav>
           {nav.map((item, index) => (
             <a key={item.label} href={item.href} className={index === 0 ? 'active' : ''}>
-              <span className="nav-index">0{index + 1}</span>
+              <span className="nav-index">{String(index + 1).padStart(2, '0')}</span>
               <span>{item.label}</span>
             </a>
           ))}
