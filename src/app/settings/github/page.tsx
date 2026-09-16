@@ -12,6 +12,18 @@ const permissionRows = [
   ['Checks / Actions', 'Read'],
 ];
 
+const successStyle = {
+  border: '1px solid #236b45',
+  background: 'rgba(35, 107, 69, 0.16)',
+  color: '#63d69a',
+};
+
+const failureStyle = {
+  border: '1px solid #5b3131',
+  background: 'rgba(91, 49, 49, 0.14)',
+  color: '#d9a2a2',
+};
+
 export default async function GitHubConnectionPage() {
   const repositories = await prisma.repository.findMany({
     where: { provider: 'github' },
@@ -24,6 +36,7 @@ export default async function GitHubConnectionPage() {
   const verification = configured ? await verifyGitHubInstallation() : null;
   const connected = verification?.ok === true;
   const discoveredRepositories = verification?.ok ? verification.repositories : [];
+  const statusText = connected ? '✓ CONNECTED' : configured ? 'AUTH FAILED' : 'NOT CONNECTED';
 
   return (
     <main className="main-panel">
@@ -41,7 +54,7 @@ export default async function GitHubConnectionPage() {
             <span className="panel-label">CONNECTION</span>
             <h2>Connect GitAgent to GitHub</h2>
           </div>
-          <span className="counter">{connected ? 'CONNECTED' : configured ? 'AUTH FAILED' : 'NOT CONNECTED'}</span>
+          <span className="counter" style={connected ? successStyle : configured ? failureStyle : undefined}>{statusText}</span>
         </div>
         <div style={{ padding: 16, display: 'grid', gap: 14 }}>
           <p style={{ margin: 0, color: '#98a2b1', maxWidth: 920, lineHeight: 1.6 }}>
@@ -52,11 +65,16 @@ export default async function GitHubConnectionPage() {
             <div><span>App slug</span><strong>{config.appSlug}</strong></div>
             <div><span>Installation ID</span><strong>{config.installationId || 'Not configured'}</strong></div>
             <div><span>Credential model</span><strong>Short-lived installation tokens</strong></div>
-            <div><span>Repository access</span><strong>{connected ? `${discoveredRepositories.length} installation-scoped repo(s)` : 'Not verified'}</strong></div>
+            <div>
+              <span>Repository access</span>
+              <strong style={connected ? { color: '#63d69a' } : undefined}>
+                {connected ? `✓ Verified (${discoveredRepositories.length} repositor${discoveredRepositories.length === 1 ? 'y' : 'ies'})` : 'Not verified'}
+              </strong>
+            </div>
           </div>
 
           {verification && !verification.ok && (
-            <div style={{ border: '1px solid #5b3131', padding: 12, color: '#d9a2a2', fontSize: 11 }}>
+            <div style={{ ...failureStyle, padding: 12, fontSize: 11 }}>
               GitHub authentication failed: {verification.error}
             </div>
           )}
@@ -64,7 +82,7 @@ export default async function GitHubConnectionPage() {
           {!connected && (
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <a className="solid-button" href={`https://github.com/apps/${config.appSlug}/installations/new`} target="_blank" rel="noreferrer">
-                Install GitAgent on GitHub
+                Install / Update GitAgent on GitHub
               </a>
               <a className="ghost-button" href="https://github.com/settings/installations" target="_blank" rel="noreferrer">
                 Manage GitHub App installations
@@ -96,20 +114,20 @@ export default async function GitHubConnectionPage() {
       <section className="panel" style={{ marginTop: 12 }}>
         <div className="panel-head">
           <div><span className="panel-label">GITHUB INSTALLATION</span><h2>Repositories returned by GitHub</h2></div>
-          <span className="counter">{discoveredRepositories.length}</span>
+          <span className="counter" style={connected ? successStyle : undefined}>{discoveredRepositories.length}</span>
         </div>
         {discoveredRepositories.length === 0 ? (
           <div style={{ padding: 16, color: '#7f8997', fontSize: 11 }}>No repositories returned by the live GitHub App installation.</div>
         ) : (
           <div className="event-table">
             {discoveredRepositories.map((repo) => (
-              <div className="event-row" key={repo.id}>
+              <div className="event-row" key={repo.id} style={{ background: 'rgba(35, 107, 69, 0.08)' }}>
                 <div className="event-summary">{repo.full_name}</div>
                 <div className="event-evidence">
                   <span className="mono muted">github</span>
                   <span className="severity info">{repo.default_branch}</span>
                   <strong className="mono">{repo.id}</strong>
-                  <span>{repo.private ? 'Private' : 'Public'} · live installation access</span>
+                  <span style={{ color: '#63d69a' }}>✓ {repo.private ? 'Private' : 'Public'} · live installation access</span>
                 </div>
               </div>
             ))}
