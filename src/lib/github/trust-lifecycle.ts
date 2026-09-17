@@ -1,41 +1,11 @@
 import { prisma } from '@/lib/db/prisma';
 
 type TrustState = 'TRUSTED' | 'RESTRICTED' | 'QUARANTINED';
-
 const CLEAN_RUN_WINDOW = 8;
 const CLEAN_RUNS_REQUIRED = 5;
-
-function trustStateFromPayload(payload: unknown): TrustState | null {
-  if (!payload || typeof payload !== 'object') return null;
-  const value = (payload as Record<string, unknown>).trustState;
-  return value === 'TRUSTED' || value === 'RESTRICTED' || value === 'QUARANTINED' ? value : null;
-}
-
-export async function getAgentTrustState(agentId: string): Promise<TrustState> {
-  const event = await prisma.auditEvent.findFirst({ where: { actorId: agentId, eventType: 'agent.trust.changed' }, orderBy: { createdAt: 'desc' } });
-  return trustStateFromPayload(event?.payload) ?? 'TRUSTED';
-}
-
-export async function recordSubstantiveViolation(agentId: string, taskId: string | null, executionId: string | null, reasonCode: string) {
-  await prisma.auditEvent.create({ data: { taskId, executionId, eventType: 'agent.trust.changed', actorType: 'system', actorId: agentId, payload: { trustState: 'QUARANTINED', previousState: await getAgentTrustState(agentId), reasonCode, cleanRunCount: 0, cleanRunWindow: CLEAN_RUN_WINDOW, requiresHumanReview: true, policyVersion: '2026-09-16.1' } } });
-  return { trustState: 'QUARANTINED' as const, requiresHumanReview: true };
-}
-
-export async function recordCleanExecution(agentId: string, taskId: string, executionId: string) {
-  const current = await getAgentTrustState(agentId);
-  if (current === 'QUARANTINED') return { trustState: current, rehabilitated: false, requiresHumanReview: true };
-  const recent = await prisma.auditEvent.findMany({ where: { actorId: agentId, eventType: { in: ['execution.completed', 'agent.trust.violation'] } }, orderBy: { createdAt: 'desc' }, take: CLEAN_RUN_WINDOW - 1 });
-  const cleanCount = 1 + recent.filter((event) => event.eventType === 'execution.completed').length;
-  if (current === 'RESTRICTED' && cleanCount >= CLEAN_RUNS_REQUIRED) {
-    await prisma.auditEvent.create({ data: { taskId, executionId, eventType: 'agent.trust.changed', actorType: 'system', actorId: agentId, payload: { trustState: 'TRUSTED', previousState: current, reasonCode: 'policy.clean_run_rehabilitation', cleanRunCount: cleanCount, cleanRunWindow: CLEAN_RUN_WINDOW, cleanRunsRequired: CLEAN_RUNS_REQUIRED, policyVersion: '2026-09-16.1' } } });
-    return { trustState: 'TRUSTED' as const, rehabilitated: true, cleanRunCount: cleanCount };
-  }
-  return { trustState: current, rehabilitated: false, cleanRunCount: cleanCount };
-}
-
-export async function restrictAgent(agentId: string, taskId: string | null, executionId: string | null, reasonCode: string) {
-  const previousState = await getAgentTrustState(agentId);
-  if (previousState === 'QUARANTINED') return { trustState: previousState, changed: false };
-  await prisma.auditEvent.create({ data: { taskId, executionId, eventType: 'agent.trust.changed', actorType: 'system', actorId: agentId, payload: { trustState: 'RESTRICTED', previousState, reasonCode, cleanRunCount: 0, cleanRunWindow: CLEAN_RUN_WINDOW, cleanRunsRequired: CLEAN_RUNS_REQUIRED, policyVersion: '2026-09-16.1' } } });
-  return { trustState: 'RESTRICTED' as const, changed: true };
-}
+function trustStateFromPayload(payload: unknown): TrustState | null { if (!payload || typeof payload !== 'object') return null; const value = (payload as Record<string, unknown>).trustState; return value === 'TRUSTED' || value === 'RESTRICTED' || value === 'QUARANTINED' ? value : null; }
+export async function getAgentTrustState(agentId: string): Promise<TrustState> { const event = await prisma.auditEvent.findFirst({ where: { actorId: agentId, eventType: 'agent.trust.changed' }, orderBy: { createdAt: 'desc' } }); return trustStateFromPayload(event?.payload) ?? 'TRUSTED'; }
+export async function recordSubstantiveViolation(agentId: string, taskId: string | null, executionId: string | null, reasonCode: string) { await prisma.auditEvent.create({ data: { taskId, executionId, eventType: 'agent.trust.changed', actorType: 'system', actorId: agentId, payload: { trustState: 'QUARANTINED', previousState: await getAgentTrustState(agentId), reasonCode, cleanRunCount: 0, cleanRunWindow: CLEAN_RUN_WINDOW, requiresHumanReview: true, policyVersion: '2026-09-16.1' } } }); return { trustState: 'QUARANTINED' as const, requiresHumanReview: true }; }
+export async function recordCleanExecution(agentId: string, taskId: string, executionId: string) { const current = await getAgentTrustState(agentId); if (current === 'QUARANTINED') return { trustState: current, rehabilitated: false, requiresHumanReview: true }; const recent = await prisma.auditEvent.findMany({ where: { actorId: agentId, eventType: { in: ['execution.completed', 'agent.trust.violation'] } }, orderBy: { createdAt: 'desc' }, take: CLEAN_RUN_WINDOW - 1 }); const cleanCount = 1 + recent.filter((event) => event.eventType === 'execution.completed').length; if (current === 'RESTRICTED' && cleanCount >= CLEAN_RUNS_REQUIRED) { await prisma.auditEvent.create({ data: { taskId, executionId, eventType: 'agent.trust.changed', actorType: 'system', actorId: agentId, payload: { trustState: 'TRUSTED', previousState: current, reasonCode: 'policy.clean_run_rehabilitation', cleanRunCount: cleanCount, cleanRunWindow: CLEAN_RUN_WINDOW, cleanRunsRequired: CLEAN_RUNS_REQUIRED, policyVersion: '2026-09-16.1' } } }); return { trustState: 'TRUSTED' as const, rehabilitated: true, cleanRunCount: cleanCount }; } return { trustState: current, rehabilitated: false, cleanRunCount: cleanCount }; }
+export async function restrictAgent(agentId: string, taskId: string | null, executionId: string | null, reasonCode: string) { const previousState = await getAgentTrustState(agentId); if (previousState === 'QUARANTINED') return { trustState: previousState, changed: false }; await prisma.auditEvent.create({ data: { taskId, executionId, eventType: 'agent.trust.changed', actorType: 'system', actorId: agentId, payload: { trustState: 'RESTRICTED', previousState, reasonCode, cleanRunCount: 0, cleanRunWindow: CLEAN_RUN_WINDOW, cleanRunsRequired: CLEAN_RUNS_REQUIRED, policyVersion: '2026-09-16.1' } } }); return { trustState: 'RESTRICTED' as const, changed: true }; }
+export async function reinstateQuarantinedAgent(agentId: string, humanActorId: string, reason: string) { const current = await getAgentTrustState(agentId); if (current !== 'QUARANTINED') return { allowed: false as const, trustState: current, reasonCode: 'policy.agent_not_quarantined' }; const human = await prisma.user.findUnique({ where: { id: humanActorId } }); if (!human) return { allowed: false as const, trustState: current, reasonCode: 'policy.human_actor_required' }; await prisma.auditEvent.create({ data: { eventType: 'agent.trust.changed', actorType: 'human', actorId: agentId, payload: { trustState: 'RESTRICTED', previousState: 'QUARANTINED', reasonCode: 'policy.human_reinstatement', approvedByUserId: human.id, approvedByEmail: human.email, reason, cleanRunCount: 0, cleanRunWindow: CLEAN_RUN_WINDOW, cleanRunsRequired: CLEAN_RUNS_REQUIRED, policyVersion: '2026-09-16.1' } } }); return { allowed: true as const, trustState: 'RESTRICTED' as const, previousState: 'QUARANTINED' as const, approvedByUserId: human.id, requiresHumanApproval: true, reasonCode: 'policy.human_reinstatement' }; }
