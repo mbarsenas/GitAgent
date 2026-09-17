@@ -1,3 +1,5 @@
+import type { Prisma } from "@prisma/client";
+
 export type AuditActorType = "human" | "implementation-agent" | "review-agent" | "policy-engine" | "system";
 
 export type AuditEventInput = {
@@ -10,7 +12,7 @@ export type AuditEventInput = {
   policyVersion?: string;
   reasonCode?: string;
   severity?: "info" | "low" | "medium" | "high" | "critical";
-  metadata?: Record<string, unknown>;
+  metadata?: Prisma.InputJsonObject;
 };
 
 export type AuditEventRecord = AuditEventInput & {
