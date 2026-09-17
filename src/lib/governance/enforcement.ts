@@ -1,5 +1,5 @@
-import type { AuditSink } from "./audit";
-import { canPerformCapability, type AgentRole, type Capability } from "./capabilities";
+import type { AuditSink, AuditActorType } from "./audit";
+import { authorizeCapability, type AgentRole, type Capability } from "./capabilities";
 
 export type EnforcementRequest = {
   role: AgentRole;
@@ -17,21 +17,44 @@ export type EnforcementDecision = {
   reasonCode?: string;
 };
 
+function auditActorType(role: AgentRole): AuditActorType {
+  switch (role) {
+    case "IMPLEMENTATION":
+      return "implementation-agent";
+    case "REVIEW":
+      return "review-agent";
+    case "DEPLOYMENT":
+      return "system";
+  }
+}
+
 export async function enforceCapability(
   request: EnforcementRequest,
   audit: AuditSink,
 ): Promise<EnforcementDecision> {
-  const allowed = canPerformCapability({
-    role: request.role,
-    capability: request.capability,
-    actorId: request.actorId,
-    targetOwnerAgentId: request.targetOwnerAgentId,
-  });
+  const selfApproval =
+    request.capability === "pr.approve" &&
+    request.targetOwnerAgentId !== undefined &&
+    request.actorId === request.targetOwnerAgentId;
 
-  if (allowed) {
+  const decision = selfApproval
+    ? {
+        allowed: false,
+        auditEvent: "capability.denied.self_review_boundary",
+      }
+    : authorizeCapability(
+        {
+          agentId: request.actorId,
+          role: request.role,
+          capabilities: [request.capability],
+        },
+        request.capability,
+      );
+
+  if (decision.allowed) {
     await audit.write({
       eventType: "capability.allowed",
-      actorType: request.role,
+      actorType: auditActorType(request.role),
       actorId: request.actorId,
       repositoryId: request.repositoryId,
       taskId: request.taskId,
@@ -44,14 +67,17 @@ export async function enforceCapability(
     return { allowed: true };
   }
 
-  const reasonCode =
-    request.capability === "review.approve" && request.actorId === request.targetOwnerAgentId
-      ? "policy.self_approval_denied"
-      : "policy.capability_denied";
+  const reasonCode = selfApproval
+    ? "policy.self_approval_denied"
+    : decision.auditEvent === "capability.denied.review_isolation_boundary"
+      ? "policy.review_isolation_boundary"
+      : decision.auditEvent === "capability.denied.self_review_boundary"
+        ? "policy.self_review_boundary"
+        : "policy.capability_denied";
 
   await audit.write({
     eventType: "capability.denied",
-    actorType: request.role,
+    actorType: auditActorType(request.role),
     actorId: request.actorId,
     repositoryId: request.repositoryId,
     taskId: request.taskId,
