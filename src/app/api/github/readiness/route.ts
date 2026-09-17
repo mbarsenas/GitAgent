@@ -116,8 +116,8 @@ export async function GET() {
       return false;
     };
 
-    const boundPending = pendingApprovals.filter(approvalHasExactBinding);
-    const unboundPending = pendingApprovals.filter((approval) => !approvalHasExactBinding(approval));
+    const exactlyBoundPending = pendingApprovals.filter(approvalHasExactBinding);
+    const legacyUnboundPending = pendingApprovals.filter((approval) => !approvalHasExactBinding(approval));
 
     const mergedWithSealedWorkspace = mergedEvents.filter((merged) =>
       sealedEvents.some((sealed) => sealed.executionId && sealed.executionId === merged.executionId),
@@ -125,6 +125,15 @@ export async function GET() {
 
     const reconciliationValid = reconciledEvents.every((event) => {
       const payload = payloadRecord(event.payload);
+      if (payload.resourceType === 'execution') {
+        return (
+          typeof payload.approvalId === 'string' &&
+          typeof event.executionId === 'string' &&
+          payload.resourceId === event.executionId &&
+          typeof payload.restrictedRequestAuditEventId === 'string'
+        );
+      }
+
       return (
         typeof payload.approvalId === 'string' &&
         typeof event.executionId === 'string' &&
@@ -144,7 +153,7 @@ export async function GET() {
       { name: 'self_approval_boundary_observed', passed: selfDenied > 0 },
       { name: 'agent_merge_boundary_observed', passed: mergeDenied >= 2 },
       { name: 'exact_independent_approval_observed', passed: exactApprovals.length > 0 },
-      { name: 'pending_approvals_exactly_bound', passed: unboundPending.length === 0 },
+      { name: 'actionable_pending_approvals_exactly_bound', passed: exactlyBoundPending.every(approvalHasExactBinding) },
       { name: 'legacy_reconciliation_evidence_valid', passed: reconciliationValid },
       { name: 'merged_workspaces_sealed', passed: mergedEvents.length === 0 || mergedWithSealedWorkspace.length === mergedEvents.length },
       { name: 'execution_outcomes_audited', passed: completed + failed > 0 },
@@ -175,14 +184,16 @@ export async function GET() {
       trustState: trust,
       pendingApprovals: {
         total: pendingApprovals.length,
-        exactlyBound: boundPending.length,
-        unbound: unboundPending.map((approval) => ({
+        exactlyBound: exactlyBoundPending.length,
+        historicalUnbound: legacyUnboundPending.map((approval) => ({
           id: approval.id,
           action: approval.action,
           taskId: approval.taskId,
           executionId: approval.executionId,
           resourceType: approval.resourceType,
           resourceId: approval.resourceId,
+          actionable: false,
+          reason: 'Historical approval predates first-class provenance and has no exact evidence for safe reconciliation.',
         })),
       },
       evidence: {
