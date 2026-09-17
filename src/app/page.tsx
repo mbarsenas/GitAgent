@@ -1,75 +1,90 @@
 import { prisma } from '@/lib/db/prisma';
+import { getAgentTrustState } from '@/lib/github/trust-lifecycle';
 
 const nav = [
   { label: 'Overview', href: '/' },
-  { label: 'Repositories', href: '#repositories' },
-  { label: 'Agents', href: '#agents' },
-  { label: 'Tasks', href: '#tasks' },
-  { label: 'Approvals', href: '#approvals' },
+  { label: 'Executions', href: '/executions' },
+  { label: 'Approvals', href: '/approvals' },
   { label: 'Audit', href: '/audit' },
   { label: 'GitHub', href: '/settings/github' },
 ];
 
-function explainEvent(eventType: string, payload: unknown) {
-  const data = (payload ?? {}) as Record<string, unknown>;
-  const metadata = (data.metadata ?? {}) as Record<string, unknown>;
-  const capability = typeof metadata.capability === 'string' ? metadata.capability : undefined;
-  const reasonCode = typeof data.reasonCode === 'string' ? data.reasonCode : undefined;
-
-  if (eventType === 'capability.denied' && reasonCode === 'policy.self_approval_denied') {
-    return 'Implementation agent tried to approve its own pull request — blocked automatically.';
-  }
-  if (eventType === 'sponsorship.granted') {
-    return 'A human sponsor granted a bounded task-scoped capability envelope.';
-  }
-  if (eventType === 'execution.created') {
-    return 'GitAgent created an isolated execution record for a governed task.';
-  }
-  if (eventType === 'capability.allowed') {
-    return capability ? `GitAgent allowed ${capability} under the active policy.` : 'GitAgent allowed a governed capability.';
-  }
-  if (eventType === 'capability.denied') {
-    return capability ? `GitAgent blocked ${capability} under the active policy.` : 'GitAgent blocked a governed capability.';
-  }
-  if (eventType === 'github.branch.created') return 'GitAgent created a governed GitHub branch.';
-  if (eventType === 'github.commit.created') return 'GitAgent committed a governed repository change.';
-  if (eventType === 'github.pr.created') return 'GitAgent opened a governed draft pull request.';
-  return 'Governance event recorded by GitAgent.';
+function payloadRecord(payload: unknown) {
+  return payload && typeof payload === 'object' ? (payload as Record<string, unknown>) : {};
 }
 
 export default async function Home() {
-  const [repository, agents, tasks, approvals, auditEvents] = await Promise.all([
-    prisma.repository.findFirst({ orderBy: { createdAt: 'asc' } }),
-    prisma.agent.findMany({ where: { status: 'ACTIVE' }, orderBy: { createdAt: 'asc' }, take: 4 }),
-    prisma.task.findMany({
-      orderBy: { createdAt: 'desc' },
-      take: 5,
-      include: { agent: true, executions: { orderBy: { createdAt: 'desc' }, take: 1 } },
+  const repository = await prisma.repository.findFirst({
+    where: { provider: 'github', externalId: '1373462743' },
+  });
+
+  const [agents, tasks, executions, pendingApprovals, auditEvents, securityRun] = await Promise.all([
+    prisma.agent.findMany({
+      where: {
+        status: 'ACTIVE',
+        OR: [
+          ...(repository ? [{ repositoryId: repository.id }] : []),
+          { repositoryId: null, grants: { some: { capability: 'review.approve', effect: 'ALLOW' } } },
+        ],
+      },
+      orderBy: { createdAt: 'asc' },
+      take: 8,
     }),
-    prisma.approval.count({ where: { status: 'PENDING' } }),
-    prisma.auditEvent.findMany({ orderBy: { createdAt: 'desc' }, take: 5 }),
+    prisma.task.findMany({
+      where: repository ? { repositoryId: repository.id } : undefined,
+      orderBy: { createdAt: 'desc' },
+      take: 8,
+      include: { agent: true },
+    }),
+    prisma.execution.findMany({
+      where: repository ? { task: { repositoryId: repository.id } } : undefined,
+      orderBy: { createdAt: 'desc' },
+      take: 8,
+      include: { task: true, agent: true, workspace: true },
+    }),
+    prisma.approval.findMany({
+      where: { status: 'PENDING', ...(repository ? { task: { repositoryId: repository.id } } : {}) },
+      orderBy: { requestedAt: 'asc' },
+      take: 8,
+      include: { task: true },
+    }),
+    prisma.auditEvent.findMany({
+      where: repository ? { task: { repositoryId: repository.id } } : undefined,
+      orderBy: { createdAt: 'desc' },
+      take: 8,
+    }),
+    prisma.auditEvent.findFirst({ where: { eventType: 'security.suite.completed' }, orderBy: { createdAt: 'desc' } }),
   ]);
 
+  const trust = await Promise.all(
+    agents.map(async (agent) => ({
+      ...agent,
+      trustState: await getAgentTrustState(agent.id),
+    })),
+  );
+
   const activeTaskCount = tasks.filter((task) => ['QUEUED', 'RUNNING', 'WAITING_APPROVAL'].includes(task.status)).length;
+  const activeWorkspaces = executions.filter((execution) => execution.workspace?.status === 'ACTIVE').length;
+  const sealedWorkspaces = executions.filter((execution) => execution.workspace?.status === 'SEALED').length;
+  const boundPending = pendingApprovals.filter((approval) => approval.executionId && approval.resourceType && approval.resourceId).length;
+  const securityPayload = payloadRecord(securityRun?.payload);
+  const securityPassed = securityPayload.passed === true;
 
   return (
     <main className="workspace">
       <header className="chrome">
         <div className="product-mark">
           <span className="mark-box">GA</span>
-          <div>
-            <strong>GitAgent</strong>
-            <span>control plane</span>
-          </div>
+          <div><strong>GitAgent</strong><span>control plane</span></div>
         </div>
         <div className="repo-context">
-          <span className="muted">workspace</span>
+          <span className="muted">repository</span>
           <strong>{repository ? `${repository.owner} / ${repository.name}` : 'No repository connected'}</strong>
           <span className="branch">{repository?.defaultBranch ?? '—'}</span>
         </div>
         <div className="chrome-actions">
-          <a className="ghost-button" href="/settings/github">GitHub connection</a>
-          <a className="ghost-button" href="/demo">Run adversarial test</a>
+          <a className="ghost-button" href="/approvals">Approvals</a>
+          <a className="ghost-button" href="/executions">Executions</a>
           <a className="solid-button" href="/tasks/new">New task</a>
         </div>
       </header>
@@ -83,163 +98,92 @@ export default async function Home() {
             </a>
           ))}
         </nav>
-        <div className="rail-footer">
-          <span className="status-dot" />
-          policy engine online
-        </div>
+        <div className="rail-footer"><span className="status-dot" />policy engine online</div>
       </aside>
 
       <section className="main-panel">
         <div className="section-head">
-          <div>
-            <p className="kicker">Workspace / Overview</p>
-            <h1>Agent operations</h1>
-          </div>
-          <div className="head-meta">
-            <span>Policy</span>
-            <strong>2026-09-16.1</strong>
-          </div>
+          <div><p className="kicker">Workspace / Overview</p><h1>Agent operations</h1></div>
+          <div className="head-meta"><span>Policy</span><strong>2026-09-16.1</strong></div>
         </div>
 
-        <section className="command-strip">
-          <div>
-            <span className="label">Repository</span>
-            <strong>{repository?.name ?? 'None'}</strong>
-          </div>
-          <div>
-            <span className="label">Default branch</span>
-            <strong>{repository?.defaultBranch ?? '—'}</strong>
-          </div>
-          <div>
-            <span className="label">Trust mode</span>
-            <strong>Selective</strong>
-            <small>Humans sponsor which agents can act.</small>
-          </div>
-          <div>
-            <span className="label">Review boundary</span>
-            <strong>Independent</strong>
-            <small>The reviewer cannot be the same agent that wrote the code.</small>
-          </div>
-          <div>
-            <span className="label">Runtime</span>
-            <strong>Isolated</strong>
-            <small>Each agent runs with separate credentials and workspace.</small>
-          </div>
+        <section className="metric-grid">
+          <article className="metric-card"><span>Active tasks</span><strong>{activeTaskCount}</strong><small>{tasks.length} recent tasks</small></article>
+          <article className="metric-card"><span>Pending approvals</span><strong>{pendingApprovals.length}</strong><small>{boundPending} provenance-bound</small></article>
+          <article className="metric-card"><span>Active workspaces</span><strong>{activeWorkspaces}</strong><small>{sealedWorkspaces} sealed</small></article>
+          <article className="metric-card"><span>Security suite</span><strong>{securityPassed ? 'PASS' : 'UNKNOWN'}</strong><small>{Number(securityPayload.totalChecks ?? 0)} controls</small></article>
         </section>
 
         <section className="ops-grid">
-          <article className="panel span-2" id="tasks">
-            <div className="panel-head">
-              <div>
-                <span className="panel-label">TASKS</span>
-                <h2>Execution queue</h2>
-              </div>
-              <span className="counter">{activeTaskCount} active</span>
-            </div>
-
-            {tasks.length === 0 ? (
-              <a className="task-empty" href="/tasks/new">
-                <span className="prompt">+</span>
-                <span>Create your first governed agent task</span>
+          <article className="panel span-2">
+            <div className="panel-head"><div><span className="panel-label">EXECUTIONS</span><h2>Recent governed work</h2></div><a className="text-link" href="/executions">Open executions →</a></div>
+            {executions.length === 0 ? <div className="separation-rule">No executions yet.</div> : executions.map((execution) => (
+              <a className="execution-row" key={execution.id} href={`/executions/${execution.id}`}>
+                <div><strong>{execution.task.title}</strong><span>{execution.id}</span></div>
+                <div><span className="label">Agent</span><strong>{execution.agent.name}</strong></div>
+                <div><span className="label">Execution</span><strong>{execution.status}</strong></div>
+                <div><span className="label">Workspace</span><strong>{execution.workspace?.status ?? 'NONE'}</strong></div>
+                <div><span className="label">Branch</span><strong>{execution.workspace?.branch ?? '—'}</strong></div>
               </a>
-            ) : (
-              tasks.map((task) => {
-                const execution = task.executions[0];
+            ))}
+          </article>
+
+          <article className="panel">
+            <div className="panel-head"><div><span className="panel-label">AGENTS</span><h2>Identity and trust</h2></div></div>
+            {trust.map((agent) => (
+              <div className="identity-row" key={agent.id}>
+                <span className="avatar">{agent.name.slice(0, 1).toUpperCase()}</span>
+                <div><strong>{agent.name}</strong><span>{agent.providerKey}/{agent.model}</span><small className={`trust ${agent.trustState.toLowerCase()}`}>{agent.trustState}</small></div>
+              </div>
+            ))}
+          </article>
+
+          <article className="panel span-2">
+            <div className="panel-head"><div><span className="panel-label">APPROVALS</span><h2>Human gates</h2></div><a className="text-link" href="/approvals">Open approvals →</a></div>
+            {pendingApprovals.length === 0 ? <div className="separation-rule">No pending approvals.</div> : pendingApprovals.map((approval) => (
+              <div className="approval-row compact" key={approval.id}>
+                <div className="approval-main"><strong>{approval.action}</strong><span>{approval.task.title}</span><small>{approval.executionId ? `execution ${approval.executionId}` : 'historical / unbound'}</small></div>
+                <div className="approval-meta"><span>{approval.resourceType ?? '—'}</span><span>{approval.resourceId ?? '—'}</span></div>
+                <div className="approval-actions"><span className={`task-state ${approval.executionId ? '' : 'locked'}`}>{approval.executionId ? 'ACTIONABLE' : 'LOCKED'}</span></div>
+              </div>
+            ))}
+          </article>
+
+          <article className="panel">
+            <div className="panel-head"><div><span className="panel-label">TASKS</span><h2>Recent task state</h2></div><a className="text-link" href="/tasks/new">New task →</a></div>
+            <div className="guardrail-list">
+              {tasks.slice(0, 6).map((task) => <div key={task.id}><span>{task.title}</span><strong>{task.status}</strong></div>)}
+            </div>
+          </article>
+
+          <article className="panel span-2">
+            <div className="panel-head"><div><span className="panel-label">AUDIT</span><h2>Recent governance evidence</h2></div><a className="text-link" href="/audit">Open audit →</a></div>
+            <div className="event-table">
+              {auditEvents.map((event) => {
+                const payload = payloadRecord(event.payload);
                 return (
-                  <div className="task-row" key={task.id}>
-                    <div className={`task-state ${task.status === 'RUNNING' ? 'running' : ''}`}>{task.status}</div>
-                    <div className="task-main">
-                      <strong>{task.title}</strong>
-                      <span>{task.agent?.name ?? 'Unassigned agent'} · {execution ? `${execution.providerKey}/${execution.model}` : 'No execution yet'}</span>
-                    </div>
-                    <div className="task-metric">
-                      <span>Budget</span>
-                      <strong>{task.maxCostUsd ? `$${Number(task.maxCostUsd).toFixed(2)}` : '—'}</strong>
-                    </div>
-                    <div className="task-metric">
-                      <span>Execution</span>
-                      <strong>{execution?.status ?? 'PENDING'}</strong>
+                  <div className="event-row" key={event.id}>
+                    <div className="event-summary">{event.eventType}</div>
+                    <div className="event-evidence">
+                      <span className="mono muted">{event.createdAt.toISOString().slice(11, 19)}</span>
+                      <span className="severity info">INFO</span>
+                      <strong className="mono">{event.actorType}</strong>
+                      <span>{event.actorId ?? 'system'}{typeof payload.reasonCode === 'string' ? ` · ${payload.reasonCode}` : ''}</span>
                     </div>
                   </div>
                 );
-              })
-            )}
-
-            <a className="task-empty" href="/tasks/new">
-              <span className="prompt">+</span>
-              <span>Create another governed agent task</span>
-            </a>
-          </article>
-
-          <article className="panel" id="agents">
-            <div className="panel-head">
-              <div>
-                <span className="panel-label">AGENTS</span>
-                <h2>Identity boundary</h2>
-              </div>
-            </div>
-            {agents.length === 0 ? (
-              <div className="separation-rule">No active agents yet.</div>
-            ) : (
-              agents.map((agent, index) => (
-                <div className="identity-row" key={agent.id}>
-                  <span className={`avatar ${index === 0 ? 'impl' : 'review'}`}>{agent.name.slice(0, 1).toUpperCase()}</span>
-                  <div>
-                    <strong>{agent.name}</strong>
-                    <span>{agent.providerKey}/{agent.model} · {agent.status.toLowerCase()}</span>
-                  </div>
-                </div>
-              ))
-            )}
-            <div className="separation-rule">Implementation and review identities use separate credentials and workspaces.</div>
-          </article>
-
-          <article className="panel span-2" id="audit">
-            <div className="panel-head">
-              <div>
-                <span className="panel-label">AUDIT</span>
-                <h2>Live governance events</h2>
-              </div>
-              <a className="text-link" href="/audit">Open timeline →</a>
-            </div>
-            <div className="event-table">
-              {auditEvents.length === 0 ? (
-                <div className="separation-rule">No audit events yet.</div>
-              ) : (
-                auditEvents.map((item) => {
-                  const payload = (item.payload ?? {}) as Record<string, unknown>;
-                  const metadata = (payload.metadata ?? {}) as Record<string, unknown>;
-                  const severity = typeof payload.severity === 'string' ? payload.severity.toUpperCase() : 'INFO';
-                  const capability = typeof metadata.capability === 'string' ? metadata.capability : '';
-                  return (
-                    <div className="event-row" key={item.id}>
-                      <div className="event-summary">{explainEvent(item.eventType, item.payload)}</div>
-                      <div className="event-evidence">
-                        <span className="mono muted">{item.createdAt.toISOString().slice(11, 19)}</span>
-                        <span className={`severity ${severity.toLowerCase()}`}>{severity}</span>
-                        <strong className="mono">{item.eventType}</strong>
-                        <span>{item.actorId ?? item.actorType}{capability ? ` · ${capability}` : ''}</span>
-                      </div>
-                    </div>
-                  );
-                })
-              )}
+              })}
             </div>
           </article>
 
-          <article className="panel" id="approvals">
-            <div className="panel-head">
-              <div>
-                <span className="panel-label">POLICY</span>
-                <h2>Guardrails</h2>
-              </div>
-              <span className="counter">{approvals} pending</span>
-            </div>
+          <article className="panel">
+            <div className="panel-head"><div><span className="panel-label">GUARDRAILS</span><h2>Policy boundary</h2></div></div>
             <div className="guardrail-list">
               <div><span>Self approval</span><strong className="deny">DENY</strong></div>
               <div><span>Protected branch write</span><strong className="deny">DENY</strong></div>
-              <div><span>Production deploy</span><strong>HUMAN</strong></div>
-              <div><span>Secret access</span><strong>GRANT</strong></div>
+              <div><span>Cross-workspace write</span><strong className="deny">DENY</strong></div>
+              <div><span>Agent merge</span><strong className="deny">DENY</strong></div>
+              <div><span>Human merge gate</span><strong>REQUIRED</strong></div>
             </div>
           </article>
         </section>
