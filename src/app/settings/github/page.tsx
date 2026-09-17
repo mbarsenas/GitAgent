@@ -1,3 +1,4 @@
+import { ControlPlaneShell } from '@/app/components/control-plane-shell';
 import { prisma } from '@/lib/db/prisma';
 import { getGitHubAppConfig, isGitHubAppConfigured } from '@/lib/github/config';
 import { verifyGitHubInstallation } from '@/lib/github/auth';
@@ -39,13 +40,12 @@ export default async function GitHubConnectionPage() {
   const statusText = connected ? '✓ CONNECTED' : configured ? 'AUTH FAILED' : 'NOT CONNECTED';
 
   return (
-    <main className="main-panel">
+    <ControlPlaneShell active="/settings/github" title="GitHub App connection" subtitle={statusText}>
       <div className="section-head">
         <div>
           <p className="kicker">Settings / Integrations</p>
           <h1>GitHub App connection</h1>
         </div>
-        <a className="ghost-button" href="/">Back to control plane</a>
       </div>
 
       <section className="panel" style={{ marginBottom: 12 }}>
@@ -158,6 +158,6 @@ export default async function GitHubConnectionPage() {
           </div>
         )}
       </section>
-    </main>
+    </ControlPlaneShell>
   );
 }
