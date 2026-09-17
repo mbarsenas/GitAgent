@@ -4,12 +4,14 @@ import { createInstallationToken } from '@/lib/github/auth';
 import { authorizeWorkspaceWrite } from '@/lib/governance/workspace';
 import { grantMatchesTaskScope } from '@/lib/policy/task-scope';
 import { getAgentTrustState } from '@/lib/github/trust-lifecycle';
+import { generateCodingPlan, isImplementationLlmConfigured } from './llm';
 
 const API = 'https://api.github.com';
 const VERSION = '2022-11-28';
 const POLICY_VERSION = '2026-09-16.1';
 
 type RepoFile = { path: string; sha: string; size: number; type: 'blob' | 'tree' };
+
 type AgentPlan = {
   summary: string;
   files: Array<{ path: string; reason: string }>;
@@ -33,7 +35,14 @@ async function github<T>(url: string, token: string, init: RequestInit = {}) {
   return response.json() as Promise<T>;
 }
 
-async function requireGrant(agentId: string, capability: string, repositoryId: string, fullName: string, taskId: string, executionId: string) {
+async function requireGrant(
+  agentId: string,
+  capability: string,
+  repositoryId: string,
+  fullName: string,
+  taskId: string,
+  executionId: string,
+) {
   const grants = await prisma.capabilityGrant.findMany({
     where: {
       agentId,
@@ -43,7 +52,10 @@ async function requireGrant(agentId: string, capability: string, repositoryId: s
       AND: [{ OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] }],
     },
   });
-  const grant = grants.find((item) => grantMatchesTaskScope(item.conditions, taskId, executionId) || item.resource === `task:${taskId}`);
+
+  const grant = grants.find(
+    (item) => grantMatchesTaskScope(item.conditions, taskId, executionId) || item.resource === `task:${taskId}`,
+  );
   if (!grant) throw new Error(`Policy denied ${capability}: no active task-scoped ALLOW capability grant.`);
   return grant;
 }
@@ -60,21 +72,24 @@ function pickCandidateFiles(goal: string, files: RepoFile[]) {
     .filter((file) => !file.path.split('/').some((part) => ignored.has(part)))
     .map((file) => ({
       ...file,
-      score: words.reduce((score, word) => score + (file.path.toLowerCase().includes(word) ? 3 : 0), 0) +
+      score:
+        words.reduce((score, word) => score + (file.path.toLowerCase().includes(word) ? 3 : 0), 0) +
         (/(src|app|lib|components|pages|api)\//.test(file.path) ? 1 : 0),
     }))
     .sort((a, b) => b.score - a.score || a.path.localeCompare(b.path))
     .slice(0, 12);
 }
 
-async function buildConservativePlan(goal: string, files: Array<{ path: string; content: string }>): Promise<AgentPlan> {
-  // Until an LLM provider is wired into the runtime, the engine behaves conservatively:
-  // inspect repository context, persist a plan, and refuse to invent arbitrary code edits.
-  return {
-    summary: `Inspected ${files.length} candidate files for: ${goal}`,
-    files: files.map((file) => ({ path: file.path, reason: 'Relevant repository context selected by path/goal matching.' })),
-    proposedChanges: [],
-  };
+function validatePlan(plan: AgentPlan, inspected: Array<{ path: string; content: string }>) {
+  const inspectedPaths = new Set(inspected.map((file) => file.path));
+  const invalid = plan.proposedChanges.filter((change) => !inspectedPaths.has(change.path));
+  if (invalid.length > 0) {
+    throw new Error(
+      `Generated plan attempted to modify files outside inspected repository context: ${invalid
+        .map((item) => item.path)
+        .join(', ')}`,
+    );
+  }
 }
 
 export async function runRepositoryAgent(executionId: string) {
@@ -91,11 +106,22 @@ export async function runRepositoryAgent(executionId: string) {
 
   const trust = await getAgentTrustState(agent.id);
   if (trust === 'QUARANTINED') throw new Error('Policy denied execution: agent is QUARANTINED.');
-  if (trust === 'RESTRICTED' && !task.approvals.some((approval) => approval.action === 'restricted.execute' && approval.status === 'APPROVED' && approval.executionId === execution.id)) {
+  if (
+    trust === 'RESTRICTED' &&
+    !task.approvals.some(
+      (approval) =>
+        approval.action === 'restricted.execute' &&
+        approval.status === 'APPROVED' &&
+        approval.executionId === execution.id,
+    )
+  ) {
     throw new Error('Policy denied execution: RESTRICTED agent lacks execution-bound human approval.');
   }
 
-  await prisma.execution.update({ where: { id: execution.id }, data: { status: 'RUNNING', startedAt: execution.startedAt ?? new Date() } });
+  await prisma.execution.update({
+    where: { id: execution.id },
+    data: { status: 'RUNNING', startedAt: execution.startedAt ?? new Date() },
+  });
   await prisma.auditEvent.create({
     data: {
       taskId: task.id,
@@ -123,7 +149,10 @@ export async function runRepositoryAgent(executionId: string) {
         installation.token,
       );
       if (result.encoding === 'base64' && result.content) {
-        inspected.push({ path: file.path, content: Buffer.from(result.content.replace(/\n/g, ''), 'base64').toString('utf8') });
+        inspected.push({
+          path: file.path,
+          content: Buffer.from(result.content.replace(/\n/g, ''), 'base64').toString('utf8'),
+        });
       }
     } catch {
       // Skip unreadable or unsupported files and continue gathering context.
@@ -148,19 +177,7 @@ export async function runRepositoryAgent(executionId: string) {
     },
   });
 
-  const plan = await buildConservativePlan(task.goal, inspected);
-  await prisma.auditEvent.create({
-    data: {
-      taskId: task.id,
-      executionId,
-      eventType: 'agent.plan.created',
-      actorType: 'agent',
-      actorId: agent.id,
-      payload: { ...plan, policyVersion: POLICY_VERSION },
-    },
-  });
-
-  if (plan.proposedChanges.length === 0) {
+  if (!isImplementationLlmConfigured()) {
     await prisma.execution.update({ where: { id: execution.id }, data: { status: 'WAITING_APPROVAL' } });
     await prisma.task.update({ where: { id: task.id }, data: { status: 'WAITING_APPROVAL' } });
     await prisma.auditEvent.create({
@@ -172,7 +189,8 @@ export async function runRepositoryAgent(executionId: string) {
         actorId: 'gitagent',
         payload: {
           reasonCode: 'agent.llm_provider_not_configured',
-          message: 'Repository inspection and planning completed, but no code changes were generated because an implementation LLM provider is not configured in the runtime.',
+          message:
+            'Repository inspection completed, but OPENAI_API_KEY is not configured for implementation generation.',
           policyVersion: POLICY_VERSION,
         },
       },
@@ -181,34 +199,94 @@ export async function runRepositoryAgent(executionId: string) {
       executionId,
       repository: fullName,
       inspectedFiles: inspected.map((file) => file.path),
-      plan,
       status: 'WAITING_APPROVAL' as const,
       blocked: true,
       reasonCode: 'agent.llm_provider_not_configured',
     };
   }
 
+  await prisma.auditEvent.create({
+    data: {
+      taskId: task.id,
+      executionId,
+      eventType: 'agent.implementation_generation.started',
+      actorType: 'agent',
+      actorId: agent.id,
+      payload: {
+        repository: fullName,
+        inspectedFiles: inspected.map((file) => file.path),
+        policyVersion: POLICY_VERSION,
+      },
+    },
+  });
+
+  const plan = await generateCodingPlan({
+    goal: task.goal,
+    repository: fullName,
+    defaultBranch: repo.defaultBranch,
+    files: inspected,
+  });
+  validatePlan(plan, inspected);
+
+  await prisma.auditEvent.create({
+    data: {
+      taskId: task.id,
+      executionId,
+      eventType: 'agent.plan.created',
+      actorType: 'agent',
+      actorId: agent.id,
+      payload: {
+        summary: plan.summary,
+        files: plan.files,
+        proposedChangePaths: plan.proposedChanges.map((change) => change.path),
+        policyVersion: POLICY_VERSION,
+      },
+    },
+  });
+
+  if (plan.proposedChanges.length === 0) {
+    await prisma.execution.update({ where: { id: execution.id }, data: { status: 'FAILED', finishedAt: new Date() } });
+    await prisma.task.update({ where: { id: task.id }, data: { status: 'FAILED' } });
+    throw new Error('Implementation model produced no code changes for the requested task.');
+  }
+
   const branch = await createGovernedBranch(executionId);
-  const workspaceDecision = execution.workspace
-    ? await authorizeWorkspaceWrite(executionId, execution.workspace.workspaceKey, agent.id)
-    : { allowed: true as const };
-  if (!workspaceDecision.allowed) throw new Error('Policy denied branch.write: execution workspace ownership failed.');
+  const refreshedExecution = await prisma.execution.findUnique({
+    where: { id: executionId },
+    include: { workspace: true },
+  });
+  if (!refreshedExecution?.workspace) throw new Error('Execution workspace was not provisioned with governed branch.');
+
+  const workspaceDecision = await authorizeWorkspaceWrite(
+    executionId,
+    refreshedExecution.workspace.workspaceKey,
+    agent.id,
+  );
+  if (!workspaceDecision.allowed) {
+    throw new Error('Policy denied branch.write: execution workspace ownership failed.');
+  }
 
   const writeGrant = await requireGrant(agent.id, 'branch.write', repo.id, fullName, task.id, execution.id);
+
   for (const change of plan.proposedChanges) {
     const current = await github<{ sha: string }>(
       `${API}/repos/${repo.owner}/${repo.name}/contents/${encodeURIComponent(change.path)}?ref=${encodeURIComponent(branch.branch)}`,
       installation.token,
     );
-    await github(`${API}/repos/${repo.owner}/${repo.name}/contents/${encodeURIComponent(change.path)}`, installation.token, {
-      method: 'PUT',
-      body: JSON.stringify({
-        message: change.message,
-        content: Buffer.from(change.content).toString('base64'),
-        sha: current.sha,
-        branch: branch.branch,
-      }),
-    });
+
+    await github(
+      `${API}/repos/${repo.owner}/${repo.name}/contents/${encodeURIComponent(change.path)}`,
+      installation.token,
+      {
+        method: 'PUT',
+        body: JSON.stringify({
+          message: change.message,
+          content: Buffer.from(change.content).toString('base64'),
+          sha: current.sha,
+          branch: branch.branch,
+        }),
+      },
+    );
   }
 
   await prisma.auditEvent.create({
@@ -227,5 +305,12 @@ export async function runRepositoryAgent(executionId: string) {
     },
   });
 
-  return { executionId, repository: fullName, branch: branch.branch, plan, status: 'RUNNING' as const, blocked: false };
+  return {
+    executionId,
+    repository: fullName,
+    branch: branch.branch,
+    plan,
+    status: 'RUNNING' as const,
+    blocked: false,
+  };
 }
