@@ -1,5 +1,5 @@
+import { Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db/prisma';
-import { PrismaAuditSink } from '@/lib/governance/prisma-audit-sink';
 
 export type CreateGovernedTaskInput = {
   repositoryId: string;
@@ -16,8 +16,6 @@ export type CreateGovernedTaskInput = {
 };
 
 export async function createGovernedTask(input: CreateGovernedTaskInput) {
-  const audit = new PrismaAuditSink();
-
   return prisma.$transaction(async (tx) => {
     const task = await tx.task.create({
       data: {
@@ -52,40 +50,47 @@ export async function createGovernedTask(input: CreateGovernedTaskInput) {
         taskId: task.id,
         agentId: input.agentId,
         providerKey: 'openai',
-        model: 'codex',
+        model: process.env.OPENAI_MODEL || 'gpt-5.6-sol',
         status: 'CREATED',
       },
     });
 
-    await audit.write({
-      eventType: 'sponsorship.granted',
-      actorType: 'human',
-      actorId: input.initiatorId,
-      repositoryId: input.repositoryId,
-      taskId: task.id,
-      executionId: execution.id,
-      policyVersion: input.policyVersion,
-      reasonCode: 'policy.task_sponsorship_granted',
-      severity: 'info',
-      metadata: {
-        agentId: input.agentId,
-        capabilities: input.capabilities,
-        expiresAt: input.expiresAt?.toISOString(),
+    const auditRows: Prisma.AuditEventCreateManyInput[] = [
+      {
+        taskId: task.id,
+        executionId: execution.id,
+        eventType: 'sponsorship.granted',
+        actorType: 'human',
+        actorId: input.initiatorId,
+        payload: {
+          repositoryId: input.repositoryId,
+          policyVersion: input.policyVersion,
+          reasonCode: 'policy.task_sponsorship_granted',
+          severity: 'info',
+          metadata: {
+            agentId: input.agentId,
+            capabilities: input.capabilities,
+            ...(input.expiresAt ? { expiresAt: input.expiresAt.toISOString() } : {}),
+          },
+        },
       },
-    });
+      {
+        taskId: task.id,
+        executionId: execution.id,
+        eventType: 'execution.created',
+        actorType: 'system',
+        actorId: 'gitagent-control-plane',
+        payload: {
+          repositoryId: input.repositoryId,
+          policyVersion: input.policyVersion,
+          reasonCode: 'execution.created',
+          severity: 'info',
+          metadata: { agentId: input.agentId },
+        },
+      },
+    ];
 
-    await audit.write({
-      eventType: 'execution.created',
-      actorType: 'system',
-      actorId: 'gitagent-control-plane',
-      repositoryId: input.repositoryId,
-      taskId: task.id,
-      executionId: execution.id,
-      policyVersion: input.policyVersion,
-      reasonCode: 'execution.created',
-      severity: 'info',
-      metadata: { agentId: input.agentId },
-    });
+    await tx.auditEvent.createMany({ data: auditRows });
 
     return { task, execution };
   });
