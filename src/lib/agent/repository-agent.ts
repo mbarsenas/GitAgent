@@ -6,12 +6,13 @@ import { performPullRequestReview } from '@/lib/github/review-boundary';
 import { authorizeWorkspaceWrite } from '@/lib/governance/workspace';
 import { grantMatchesTaskScope } from '@/lib/policy/task-scope';
 import { getAgentTrustState } from '@/lib/github/trust-lifecycle';
-import { generateCodingPlan, isImplementationLlmConfigured } from './llm';
-import { validateRepositorySnapshot } from './validation';
+import { generateCodingPlan, generateValidationRepair, isImplementationLlmConfigured } from './llm';
+import { validateRepositorySnapshot, type ValidationResult } from './validation';
 
 const API = 'https://api.github.com';
 const VERSION = '2022-11-28';
 const POLICY_VERSION = '2026-09-16.1';
+const MAX_REPAIR_ATTEMPTS = 2;
 
 type RepoFile = { path: string; sha: string; size: number; type: 'blob' | 'tree' };
 
@@ -83,9 +84,8 @@ function pickCandidateFiles(goal: string, files: RepoFile[]) {
     .slice(0, 12);
 }
 
-function validatePlan(plan: AgentPlan, inspected: Array<{ path: string; content: string }>) {
-  const inspectedPaths = new Set(inspected.map((file) => file.path));
-  const invalid = plan.proposedChanges.filter((change) => !inspectedPaths.has(change.path));
+function validatePlan(plan: AgentPlan, allowedPaths: Set<string>) {
+  const invalid = plan.proposedChanges.filter((change) => !allowedPaths.has(change.path));
   if (invalid.length > 0) {
     throw new Error(
       `Generated plan attempted to modify files outside inspected repository context: ${invalid
@@ -93,6 +93,15 @@ function validatePlan(plan: AgentPlan, inspected: Array<{ path: string; content:
         .join(', ')}`,
     );
   }
+}
+
+function mergeChanges(
+  current: Array<{ path: string; content: string; message: string }>,
+  repair: Array<{ path: string; content: string; message: string }>,
+) {
+  const merged = new Map(current.map((item) => [item.path, item]));
+  for (const item of repair) merged.set(item.path, item);
+  return Array.from(merged.values());
 }
 
 async function findIndependentReviewer(implementationAgentId: string, repositoryId: string, repository: string) {
@@ -247,7 +256,8 @@ export async function runRepositoryAgent(executionId: string) {
     defaultBranch: repo.defaultBranch,
     files: inspected,
   });
-  validatePlan(plan, inspected);
+  const allowedPaths = new Set(inspected.map((file) => file.path));
+  validatePlan(plan, allowedPaths);
 
   await prisma.auditEvent.create({
     data: {
@@ -278,11 +288,12 @@ export async function runRepositoryAgent(executionId: string) {
   const workspaceDecision = await authorizeWorkspaceWrite(executionId, refreshedExecution.workspace.workspaceKey, agent.id);
   if (!workspaceDecision.allowed) throw new Error('Policy denied branch.write: execution workspace ownership failed.');
 
-  const validation = await validateRepositorySnapshot({
+  let proposedChanges = [...plan.proposedChanges];
+  let validation: ValidationResult = await validateRepositorySnapshot({
     owner: repo.owner,
     name: repo.name,
     branch: repo.defaultBranch,
-    files: plan.proposedChanges.map((change) => ({ path: change.path, content: change.content })),
+    files: proposedChanges.map((change) => ({ path: change.path, content: change.content })),
   });
 
   await prisma.auditEvent.create({
@@ -294,6 +305,7 @@ export async function runRepositoryAgent(executionId: string) {
       actorId: agent.id,
       payload: {
         repository: fullName,
+        attempt: 0,
         projectType: validation.projectType,
         passed: validation.passed,
         commands: validation.commands,
@@ -301,6 +313,87 @@ export async function runRepositoryAgent(executionId: string) {
       },
     },
   });
+
+  let repairAttempts = 0;
+  while (!validation.passed && repairAttempts < MAX_REPAIR_ATTEMPTS) {
+    repairAttempts += 1;
+
+    await prisma.auditEvent.create({
+      data: {
+        taskId: task.id,
+        executionId,
+        eventType: 'agent.repair.started',
+        actorType: 'agent',
+        actorId: agent.id,
+        payload: {
+          repository: fullName,
+          attempt: repairAttempts,
+          failedCommands: validation.commands.filter((item) => item.exitCode !== 0).map((item) => item.command),
+          policyVersion: POLICY_VERSION,
+        },
+      },
+    });
+
+    const currentFiles = inspected.map((file) => {
+      const changed = proposedChanges.find((item) => item.path === file.path);
+      return { path: file.path, content: changed?.content ?? file.content };
+    });
+    const repair = await generateValidationRepair({
+      goal: task.goal,
+      repository: fullName,
+      files: currentFiles,
+      validation: validation.commands,
+      attempt: repairAttempts,
+    });
+    validatePlan(repair, allowedPaths);
+
+    if (repair.proposedChanges.length === 0) {
+      await prisma.auditEvent.create({
+        data: {
+          taskId: task.id,
+          executionId,
+          eventType: 'agent.repair.exhausted',
+          actorType: 'agent',
+          actorId: agent.id,
+          payload: {
+            repository: fullName,
+            attempt: repairAttempts,
+            reasonCode: 'agent.repair_no_changes',
+            policyVersion: POLICY_VERSION,
+          },
+        },
+      });
+      break;
+    }
+
+    proposedChanges = mergeChanges(proposedChanges, repair.proposedChanges);
+    validation = await validateRepositorySnapshot({
+      owner: repo.owner,
+      name: repo.name,
+      branch: repo.defaultBranch,
+      files: proposedChanges.map((change) => ({ path: change.path, content: change.content })),
+    });
+
+    await prisma.auditEvent.create({
+      data: {
+        taskId: task.id,
+        executionId,
+        eventType: 'agent.repair.completed',
+        actorType: 'agent',
+        actorId: agent.id,
+        payload: {
+          repository: fullName,
+          attempt: repairAttempts,
+          summary: repair.summary,
+          changedFiles: repair.proposedChanges.map((change) => change.path),
+          validationPassed: validation.passed,
+          projectType: validation.projectType,
+          commands: validation.commands,
+          policyVersion: POLICY_VERSION,
+        },
+      },
+    });
+  }
 
   if (!validation.passed) {
     await prisma.execution.update({ where: { id: execution.id }, data: { status: 'FAILED', finishedAt: new Date() } });
@@ -313,8 +406,9 @@ export async function runRepositoryAgent(executionId: string) {
         actorType: 'system',
         actorId: 'gitagent',
         payload: {
-          reasonCode: 'agent.validation_failed',
+          reasonCode: 'agent.validation_failed_after_repair',
           projectType: validation.projectType,
+          repairAttempts,
           commands: validation.commands,
           policyVersion: POLICY_VERSION,
         },
@@ -324,17 +418,18 @@ export async function runRepositoryAgent(executionId: string) {
       executionId,
       repository: fullName,
       branch: branch.branch,
-      plan,
+      plan: { ...plan, proposedChanges },
       validation,
+      repairAttempts,
       status: 'FAILED' as const,
       blocked: true,
-      reasonCode: 'agent.validation_failed',
+      reasonCode: 'agent.validation_failed_after_repair',
     };
   }
 
   const writeGrant = await requireGrant(agent.id, 'branch.write', repo.id, fullName, task.id, execution.id);
 
-  for (const change of plan.proposedChanges) {
+  for (const change of proposedChanges) {
     const current = await github<{ sha: string }>(
       `${API}/repos/${repo.owner}/${repo.name}/contents/${encodeURIComponent(change.path)}?ref=${encodeURIComponent(branch.branch)}`,
       installation.token,
@@ -360,8 +455,9 @@ export async function runRepositoryAgent(executionId: string) {
       payload: {
         branch: branch.branch,
         capabilityGrantId: writeGrant.id,
-        files: plan.proposedChanges.map((change) => change.path),
+        files: proposedChanges.map((change) => change.path),
         validationPassed: true,
+        repairAttempts,
         policyVersion: POLICY_VERSION,
       },
     },
@@ -402,8 +498,9 @@ export async function runRepositoryAgent(executionId: string) {
     executionId,
     repository: fullName,
     branch: branch.branch,
-    plan,
+    plan: { ...plan, proposedChanges },
     validation,
+    repairAttempts,
     pullRequestNumber: change.pullRequestNumber,
     pullRequestUrl: change.pullRequestUrl,
     independentReviewer: reviewer ? { id: reviewer.id, name: reviewer.name } : null,
