@@ -4,6 +4,8 @@ import { createGovernedChange } from './governed-change';
 import { attemptPullRequestApproval } from './review-boundary';
 import { evaluateProtectedBranchWrite, evaluateWorkspaceWrite } from './negative-controls';
 
+const IMPLEMENTATION_CAPABILITIES = ['branch.create', 'branch.write', 'pr.create'];
+
 export async function runGovernedDemo() {
   const repository = await prisma.repository.findFirst({ where: { owner: 'mbarsenas', name: 'GitAgent' }, orderBy: { createdAt: 'asc' } });
   if (!repository) throw new Error('GitAgent repository not found.');
@@ -14,8 +16,16 @@ export async function runGovernedDemo() {
   const initiator = await prisma.user.findFirst({ orderBy: { createdAt: 'asc' } });
   if (!initiator) throw new Error('Sponsor user not found.');
 
-  const task = await prisma.task.create({ data: { title: `Governed vertical slice ${new Date().toISOString()}`, goal: 'Prove implementation, independent review, and adversarial policy controls end to end.', status: 'RUNNING', repositoryId: repository.id, agentId: implementationAgent.id, initiatorId: initiator.id, requiresHumanApproval: false } });
+  const task = await prisma.task.create({ data: { title: `Governed vertical slice ${new Date().toISOString()}`, goal: 'Prove implementation, independent review, adversarial controls, and execution-scoped capability enforcement end to end.', status: 'RUNNING', repositoryId: repository.id, agentId: implementationAgent.id, initiatorId: initiator.id, requiresHumanApproval: false } });
   const execution = await prisma.execution.create({ data: { taskId: task.id, agentId: implementationAgent.id, status: 'RUNNING', providerKey: implementationAgent.providerKey, model: implementationAgent.model, startedAt: new Date() } });
+
+  const executionGrantIds: string[] = [];
+  for (const capability of IMPLEMENTATION_CAPABILITIES) {
+    const grant = await prisma.capabilityGrant.create({ data: { agentId: implementationAgent.id, capability, resource: repository.id, effect: 'ALLOW', conditions: { scope: 'sponsored-execution', taskId: task.id, executionId: execution.id, repository: `${repository.owner}/${repository.name}` } } });
+    executionGrantIds.push(grant.id);
+  }
+
+  await prisma.auditEvent.create({ data: { taskId: task.id, executionId: execution.id, eventType: 'sponsorship.granted', actorType: 'human', actorId: initiator.id, payload: { policyVersion: '2026-09-16.1', repository: `${repository.owner}/${repository.name}`, implementationAgentId: implementationAgent.id, reviewAgentId: reviewAgent.id, capabilityGrantIds: executionGrantIds, capabilities: IMPLEMENTATION_CAPABILITIES, scope: { taskId: task.id, executionId: execution.id } } } });
   await prisma.auditEvent.create({ data: { taskId: task.id, executionId: execution.id, eventType: 'execution.started', actorType: 'user', actorId: initiator.id, payload: { policyVersion: '2026-09-16.1', repository: `${repository.owner}/${repository.name}`, implementationAgentId: implementationAgent.id, reviewAgentId: reviewAgent.id } } });
 
   try {
@@ -33,12 +43,12 @@ export async function runGovernedDemo() {
 
     await prisma.execution.update({ where: { id: execution.id }, data: { status: 'SUCCEEDED', finishedAt: new Date() } });
     await prisma.task.update({ where: { id: task.id }, data: { status: 'SUCCEEDED' } });
-    await prisma.auditEvent.create({ data: { taskId: task.id, executionId: execution.id, eventType: 'execution.completed', actorType: 'system', actorId: 'gitagent', payload: { policyVersion: '2026-09-16.1', result: 'success', pullRequestNumber: change.pullRequestNumber, controlsPassed: true, selfApprovalDenied: true, protectedBranchWriteDenied: true, crossWorkspaceWriteDenied: true, independentReviewPrincipal: independentReview.reviewGitHubApp, independentApprovalSubmitted: true } } });
-    return { taskId: task.id, executionId: execution.id, repository: branch.repository, branch: branch.branch, pullRequestNumber: change.pullRequestNumber, pullRequestUrl: change.pullRequestUrl, controlsPassed, protectedBranch, crossWorkspace, selfApproval, independentReview, independentApproval };
+    await prisma.auditEvent.create({ data: { taskId: task.id, executionId: execution.id, eventType: 'execution.completed', actorType: 'system', actorId: 'gitagent', payload: { policyVersion: '2026-09-16.1', result: 'success', pullRequestNumber: change.pullRequestNumber, controlsPassed: true, taskScopedCapabilities: true, capabilityGrantIds: executionGrantIds, selfApprovalDenied: true, protectedBranchWriteDenied: true, crossWorkspaceWriteDenied: true, independentReviewPrincipal: independentReview.reviewGitHubApp, independentApprovalSubmitted: true } } });
+    return { taskId: task.id, executionId: execution.id, repository: branch.repository, branch: branch.branch, pullRequestNumber: change.pullRequestNumber, pullRequestUrl: change.pullRequestUrl, controlsPassed, taskScopedCapabilities: true, executionGrantIds, protectedBranch, crossWorkspace, selfApproval, independentReview, independentApproval };
   } catch (error) {
     await prisma.execution.update({ where: { id: execution.id }, data: { status: 'FAILED', finishedAt: new Date() } });
     await prisma.task.update({ where: { id: task.id }, data: { status: 'FAILED' } });
-    await prisma.auditEvent.create({ data: { taskId: task.id, executionId: execution.id, eventType: 'execution.failed', actorType: 'system', actorId: 'gitagent', payload: { policyVersion: '2026-09-16.1', error: error instanceof Error ? error.message : String(error) } } });
+    await prisma.auditEvent.create({ data: { taskId: task.id, executionId: execution.id, eventType: 'execution.failed', actorType: 'system', actorId: 'gitagent', payload: { policyVersion: '2026-09-16.1', error: error instanceof Error ? error.message : String(error), capabilityGrantIds: executionGrantIds } } });
     throw error;
   }
 }
