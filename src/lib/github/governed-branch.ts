@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/db/prisma';
+import { grantMatchesTaskScope } from '@/lib/policy/task-scope';
 import { createInstallationToken } from './auth';
 
 const GITHUB_API = 'https://api.github.com';
@@ -32,7 +33,7 @@ export async function createGovernedBranch(executionId: string) {
   const repo = task.repository;
   if (task.agentId !== agent.id) throw new Error('Execution agent is not assigned to this task.');
 
-  const grant = await prisma.capabilityGrant.findFirst({
+  const candidateGrants = await prisma.capabilityGrant.findMany({
     where: {
       agentId: agent.id,
       capability: 'branch.create',
@@ -41,7 +42,8 @@ export async function createGovernedBranch(executionId: string) {
       AND: [{ OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] }],
     },
   });
-  if (!grant) throw new Error('Policy denied branch.create: no active ALLOW capability grant for this repository.');
+  const grant = candidateGrants.find((item) => grantMatchesTaskScope(item.conditions, task.id, execution.id));
+  if (!grant) throw new Error('Policy denied branch.create: no active task-scoped ALLOW capability grant for this execution.');
 
   const installation = await createInstallationToken();
   const token = installation.token;
@@ -78,7 +80,7 @@ export async function createGovernedBranch(executionId: string) {
         reasonCode: 'policy.branch_create_allowed',
         severity: 'info',
         result: 'success',
-        metadata: { explanation: 'GitAgent authorized the implementation agent to create a task-scoped branch using a short-lived GitHub App installation token.' },
+        metadata: { taskScoped: true, taskId: task.id, executionId: execution.id, explanation: 'GitAgent authorized the implementation agent to create a branch only for this sponsored task and execution.' },
       },
     },
   });
