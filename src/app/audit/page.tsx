@@ -1,3 +1,4 @@
+import { ControlPlaneShell } from '@/app/components/control-plane-shell';
 import { listAuditTimeline } from '@/lib/governance/audit-query';
 
 function readPayload(payload: unknown) {
@@ -9,52 +10,57 @@ export default async function AuditPage() {
   const events = await listAuditTimeline(100);
 
   return (
-    <main className="content" style={{ maxWidth: 1200, margin: '0 auto' }}>
-      <header className="topbar">
+    <ControlPlaneShell active="/audit" title="Audit timeline" subtitle={`${events.length} events`}>
+      <div className="section-head">
         <div>
-          <p className="eyebrow">Governance evidence</p>
+          <p className="kicker">Control plane / Audit</p>
           <h1>Audit timeline</h1>
-          <p className="lede">Allowed and denied agent actions are persisted with actor, task, execution, policy and reason metadata.</p>
         </div>
-        <a className="primary" href="/">Back to dashboard</a>
-      </header>
+      </div>
 
-      <section className="card">
-        {events.length === 0 ? (
-          <div className="empty-state">
-            <strong>No audit events yet</strong>
-            <p>Governed agent actions will appear here after capability enforcement runs.</p>
+      <section className="panel">
+        <div className="panel-head">
+          <div>
+            <span className="panel-label">GOVERNANCE EVIDENCE</span>
+            <h2>Allowed and denied agent actions</h2>
           </div>
+          <span className="counter">{events.length} shown</span>
+        </div>
+
+        {events.length === 0 ? (
+          <div className="separation-rule">No audit events yet.</div>
         ) : (
-          <div style={{ display: 'grid', gap: 12 }}>
+          <div className="event-table">
             {events.map((event) => {
               const payload = readPayload(event.payload);
               const metadata = readPayload(payload.metadata);
+              const severity = String(payload.severity ?? 'info').toUpperCase();
+              const reasonCode = String(payload.reasonCode ?? 'no reason code');
+
               return (
-                <article key={event.id} className="card" style={{ margin: 0 }}>
-                  <div className="card-heading">
-                    <div>
-                      <p className="eyebrow">{String(payload.severity ?? 'info').toUpperCase()}</p>
-                      <h2 style={{ marginBottom: 6 }}>{event.eventType}</h2>
-                      <p style={{ margin: 0 }}>
-                        {event.actorType} · {event.actorId ?? 'unknown actor'}
-                      </p>
-                    </div>
-                    <span className="pill">{String(payload.reasonCode ?? 'no reason code')}</span>
+                <article key={event.id} className="event-row">
+                  <div className="event-summary">
+                    <strong>{event.eventType}</strong>
+                    <span className={`severity ${severity.toLowerCase()}`}>{severity}</span>
                   </div>
-                  <ul className="policy-list">
-                    <li><span>Task</span><strong>{event.taskId ?? '—'}</strong></li>
-                    <li><span>Execution</span><strong>{event.executionId ?? '—'}</strong></li>
-                    <li><span>Policy</span><strong>{String(payload.policyVersion ?? '—')}</strong></li>
-                    <li><span>Capability</span><strong>{String(metadata.capability ?? '—')}</strong></li>
-                    <li><span>Recorded</span><strong>{event.createdAt.toISOString()}</strong></li>
-                  </ul>
+                  <div className="event-evidence">
+                    <span className="mono muted">{event.createdAt.toISOString().slice(11, 19)}</span>
+                    <span>{event.actorType}</span>
+                    <strong className="mono">{event.actorId ?? 'unknown actor'}</strong>
+                    <span>{reasonCode}</span>
+                  </div>
+                  <div className="audit-meta-grid">
+                    <div><span className="label">Task</span><strong className="mono">{event.taskId ?? '—'}</strong></div>
+                    <div><span className="label">Execution</span><strong className="mono">{event.executionId ?? '—'}</strong></div>
+                    <div><span className="label">Policy</span><strong>{String(payload.policyVersion ?? '—')}</strong></div>
+                    <div><span className="label">Capability</span><strong>{String(metadata.capability ?? '—')}</strong></div>
+                  </div>
                 </article>
               );
             })}
           </div>
         )}
       </section>
-    </main>
+    </ControlPlaneShell>
   );
 }
