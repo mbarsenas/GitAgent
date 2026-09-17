@@ -5,6 +5,22 @@ import {
   recordHumanMergeDecision,
 } from '@/lib/github/merge-boundary';
 
+function statusForError(message: string) {
+  if (message.includes('not found')) return 404;
+  if (message.includes('Human actor')) return 403;
+  if (
+    message.includes('already decided') ||
+    message.includes('must be APPROVED') ||
+    message.includes('binding') ||
+    message.includes('provenance') ||
+    message.includes('draft') ||
+    message.includes('state is')
+  ) {
+    return 409;
+  }
+  return 500;
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -21,13 +37,24 @@ export async function POST(request: Request) {
           { status: 400 },
         );
       }
+
       const result = await recordHumanMergeDecision(approvalId, humanActorId, decision, reason);
-      return NextResponse.json({ ok: true, phase: 'decision', ...result });
+      return NextResponse.json({
+        ok: true,
+        phase: 'decision',
+        nextAction: decision === 'APPROVE' ? 'EXECUTE' : null,
+        ...result,
+      });
     }
 
     if (action === 'EXECUTE') {
       const result = await executeApprovedMerge(approvalId);
-      return NextResponse.json({ ok: true, phase: 'execution', ...result });
+      return NextResponse.json({
+        ok: true,
+        phase: 'execution',
+        recoveryAware: true,
+        ...result,
+      });
     }
 
     if (!humanActorId) {
@@ -38,20 +65,18 @@ export async function POST(request: Request) {
     }
 
     const result = await executeHumanApprovedMerge(approvalId, humanActorId, reason);
-    return NextResponse.json({ ok: true, phase: 'decision+execution', ...result });
+    return NextResponse.json({
+      ok: true,
+      phase: 'decision+execution',
+      compatibilityFlow: true,
+      recoveryAware: true,
+      ...result,
+    });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    const status = message.includes('not found')
-      ? 404
-      : message.includes('already decided') ||
-          message.includes('must be APPROVED') ||
-          message.includes('binding') ||
-          message.includes('provenance')
-        ? 409
-        : message.includes('Human actor')
-          ? 403
-          : 500;
-
-    return NextResponse.json({ ok: false, error: message }, { status });
+    return NextResponse.json(
+      { ok: false, error: message, phase: 'merge-control', recoveryAware: true },
+      { status: statusForError(message) },
+    );
   }
 }
