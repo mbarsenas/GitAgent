@@ -39,6 +39,7 @@ export async function GET(request: Request) {
     const review = exactPrEvent('github.review.created');
     const reviewApproval = exactPrEvent('github.review.approved');
     const mergeRequest = exactPrEvent('merge.approval.requested');
+    const mergedEvent = exactPrEvent('github.pr.merged');
     const implementationMergeDeny = events.find(
       (event) => event.eventType === 'policy.merge.denied' && event.actorId === execution.agentId,
     );
@@ -58,6 +59,7 @@ export async function GET(request: Request) {
       : undefined;
 
     const workspaceProvisioned = events.find((event) => event.eventType === 'workspace.provisioned');
+    const workspaceSealedEvent = events.find((event) => event.eventType === 'workspace.sealed');
     const branchCreated = events.find((event) => event.eventType === 'github.branch.created');
     const commitCreated = events.find((event) => event.eventType === 'github.commit.created');
     const workspaceBound =
@@ -115,6 +117,28 @@ export async function GET(request: Request) {
       },
     ];
 
+    if (mergedEvent) {
+      checks.push(
+        {
+          name: 'human_merge_completed',
+          passed:
+            execution.task.status === 'SUCCEEDED' &&
+            !!mergeApproval &&
+            mergeApproval.status === 'APPROVED' &&
+            payload(mergedEvent).approvalId === mergeApproval.id,
+        },
+        {
+          name: 'workspace_sealed_after_merge',
+          passed:
+            !!execution.workspace &&
+            execution.workspace.status === 'SEALED' &&
+            execution.workspace.writable === false &&
+            !!workspaceSealedEvent &&
+            payload(workspaceSealedEvent).workspaceId === execution.workspace.id,
+        },
+      );
+    }
+
     const failed = checks.filter((check) => !check.passed);
     return NextResponse.json({
       ok: true,
@@ -124,6 +148,7 @@ export async function GET(request: Request) {
       pullRequestNumber: Number.isFinite(pullRequestNumber) ? pullRequestNumber : null,
       taskStatus: execution.task.status,
       executionStatus: execution.status,
+      merged: !!mergedEvent,
       workspace: execution.workspace
         ? {
             id: execution.workspace.id,
@@ -131,6 +156,7 @@ export async function GET(request: Request) {
             branch: execution.workspace.branch,
             writable: execution.workspace.writable,
             status: execution.workspace.status,
+            sealedAt: execution.workspace.sealedAt,
           }
         : null,
       summary: { total: checks.length, passed: checks.length - failed.length, failed: failed.length },
@@ -139,6 +165,8 @@ export async function GET(request: Request) {
         reviewAuditEventId: review?.id ?? null,
         approvalAuditEventId: reviewApproval?.id ?? null,
         mergeApprovalAuditEventId: mergeRequest?.id ?? null,
+        mergedAuditEventId: mergedEvent?.id ?? null,
+        workspaceSealedAuditEventId: workspaceSealedEvent?.id ?? null,
         mergeApproval: mergeApproval
           ? {
               id: mergeApproval.id,
@@ -147,6 +175,8 @@ export async function GET(request: Request) {
               resourceType: mergeApproval.resourceType,
               resourceId: mergeApproval.resourceId,
               status: mergeApproval.status,
+              actorId: mergeApproval.actorId,
+              decidedAt: mergeApproval.decidedAt,
             }
           : null,
         pendingHumanApprovals: execution.task.approvals
