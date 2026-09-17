@@ -18,7 +18,7 @@ export default async function Home() {
     where: { provider: 'github', externalId: '1373462743' },
   });
 
-  const [agents, tasks, executions, pendingApprovals, auditEvents, securityRun] = await Promise.all([
+  const [agents, tasks, executions, pendingApprovals, auditEvents, securityRun, readinessRun] = await Promise.all([
     prisma.agent.findMany({
       where: {
         status: 'ACTIVE',
@@ -51,24 +51,28 @@ export default async function Home() {
     prisma.auditEvent.findMany({
       where: repository ? { task: { repositoryId: repository.id } } : undefined,
       orderBy: { createdAt: 'desc' },
-      take: 8,
+      take: 6,
     }),
     prisma.auditEvent.findFirst({ where: { eventType: 'security.suite.completed' }, orderBy: { createdAt: 'desc' } }),
+    prisma.auditEvent.findFirst({ where: { eventType: 'readiness.checked' }, orderBy: { createdAt: 'desc' } }),
   ]);
 
   const trust = await Promise.all(
-    agents.map(async (agent) => ({
-      ...agent,
-      trustState: await getAgentTrustState(agent.id),
-    })),
+    agents.map(async (agent) => ({ ...agent, trustState: await getAgentTrustState(agent.id) })),
   );
 
-  const activeTaskCount = tasks.filter((task) => ['QUEUED', 'RUNNING', 'WAITING_APPROVAL'].includes(task.status)).length;
-  const activeWorkspaces = executions.filter((execution) => execution.workspace?.status === 'ACTIVE').length;
-  const sealedWorkspaces = executions.filter((execution) => execution.workspace?.status === 'SEALED').length;
-  const boundPending = pendingApprovals.filter((approval) => approval.executionId && approval.resourceType && approval.resourceId).length;
   const securityPayload = payloadRecord(securityRun?.payload);
   const securityPassed = securityPayload.passed === true;
+  const actionableApprovals = pendingApprovals.filter(
+    (approval) => approval.executionId && approval.resourceType && approval.resourceId,
+  );
+  const historicalApprovals = pendingApprovals.filter(
+    (approval) => !approval.executionId || !approval.resourceType || !approval.resourceId,
+  );
+  const activeWorkspaces = executions.filter((execution) => execution.workspace?.status === 'ACTIVE').length;
+  const latestExecution = executions[0];
+  const latestSuccessful = executions.find((execution) => execution.status === 'SUCCEEDED');
+  const repositoryProtected = securityPassed && trust.every((agent) => agent.trustState !== 'QUARANTINED');
 
   return (
     <main className="workspace">
@@ -85,7 +89,7 @@ export default async function Home() {
         <div className="chrome-actions">
           <a className="ghost-button" href="/approvals">Approvals</a>
           <a className="ghost-button" href="/executions">Executions</a>
-          <a className="solid-button" href="/tasks/new">New task</a>
+          <a className="solid-button" href="/tasks/new">Start governed task</a>
         </div>
       </header>
 
@@ -102,34 +106,92 @@ export default async function Home() {
       </aside>
 
       <section className="main-panel">
-        <div className="section-head">
-          <div><p className="kicker">Workspace / Overview</p><h1>Agent operations</h1></div>
-          <div className="head-meta"><span>Policy</span><strong>2026-09-16.1</strong></div>
-        </div>
-
-        <section className="metric-grid">
-          <article className="metric-card"><span>Active tasks</span><strong>{activeTaskCount}</strong><small>{tasks.length} recent tasks</small></article>
-          <article className="metric-card"><span>Pending approvals</span><strong>{pendingApprovals.length}</strong><small>{boundPending} provenance-bound</small></article>
-          <article className="metric-card"><span>Active workspaces</span><strong>{activeWorkspaces}</strong><small>{sealedWorkspaces} sealed</small></article>
-          <article className="metric-card"><span>Security suite</span><strong>{securityPassed ? 'PASS' : 'UNKNOWN'}</strong><small>{Number(securityPayload.totalChecks ?? 0)} controls</small></article>
+        <section className="client-hero panel">
+          <div>
+            <p className="kicker">AI software governance</p>
+            <h1>Keep AI coding agents productive without giving them uncontrolled repository access.</h1>
+            <p className="client-lede">
+              GitAgent separates implementation, review, and merge authority so every AI-generated change follows a governed path before it reaches your default branch.
+            </p>
+          </div>
+          <div className="protection-card">
+            <span className="label">Repository status</span>
+            <strong className={repositoryProtected ? 'protection-good' : 'protection-warn'}>
+              {repositoryProtected ? 'PROTECTED' : 'ATTENTION'}
+            </strong>
+            <small>{repository ? `${repository.owner}/${repository.name}` : 'No repository connected'}</small>
+          </div>
         </section>
 
-        <section className="ops-grid">
-          <article className="panel span-2">
-            <div className="panel-head"><div><span className="panel-label">EXECUTIONS</span><h2>Recent governed work</h2></div><a className="text-link" href="/executions">Open executions →</a></div>
-            {executions.length === 0 ? <div className="separation-rule">No executions yet.</div> : executions.map((execution) => (
-              <a className="execution-row" key={execution.id} href={`/executions/${execution.id}`}>
-                <div><strong>{execution.task.title}</strong><span>{execution.id}</span></div>
-                <div><span className="label">Agent</span><strong>{execution.agent.name}</strong></div>
-                <div><span className="label">Execution</span><strong>{execution.status}</strong></div>
-                <div><span className="label">Workspace</span><strong>{execution.workspace?.status ?? 'NONE'}</strong></div>
-                <div><span className="label">Branch</span><strong>{execution.workspace?.branch ?? '—'}</strong></div>
+        <section className="client-grid">
+          <article className="panel attention-card">
+            <div className="panel-head">
+              <div><span className="panel-label">NEEDS YOUR ATTENTION</span><h2>Human decisions</h2></div>
+              <span className="counter">{actionableApprovals.length}</span>
+            </div>
+            {actionableApprovals.length === 0 ? (
+              <div className="client-empty">Nothing needs your approval right now.</div>
+            ) : (
+              actionableApprovals.slice(0, 4).map((approval) => (
+                <div className="client-list-row" key={approval.id}>
+                  <div><strong>{approval.action.startsWith('pr.merge:') ? 'Merge approval required' : 'Restricted execution approval required'}</strong><span>{approval.task.title}</span></div>
+                  <a className="text-link" href="/approvals">Review →</a>
+                </div>
+              ))
+            )}
+            {historicalApprovals.length > 0 && (
+              <div className="historical-note">{historicalApprovals.length} historical approval record{historicalApprovals.length === 1 ? '' : 's'} retained for audit only.</div>
+            )}
+          </article>
+
+          <article className="panel posture-card">
+            <div className="panel-head"><div><span className="panel-label">WHAT GITAGENT IS ENFORCING</span><h2>Protection currently active</h2></div></div>
+            <div className="posture-list">
+              <div><span>✓</span><strong>AI agents cannot write directly to the default branch</strong></div>
+              <div><span>✓</span><strong>Implementation agents cannot approve their own changes</strong></div>
+              <div><span>✓</span><strong>Independent review uses a separate agent identity</strong></div>
+              <div><span>✓</span><strong>AI agents cannot merge without a human decision</strong></div>
+              <div><span>✓</span><strong>Every governed action is recorded in the audit trail</strong></div>
+            </div>
+          </article>
+        </section>
+
+        <section className="metric-grid customer-metrics">
+          <article className="metric-card"><span>Needs your approval</span><strong>{actionableApprovals.length}</strong><small>human decisions waiting</small></article>
+          <article className="metric-card"><span>Active isolated workspaces</span><strong>{activeWorkspaces}</strong><small>execution-scoped boundaries</small></article>
+          <article className="metric-card"><span>Latest AI change</span><strong>{latestExecution?.status ?? 'NONE'}</strong><small>{latestExecution?.task.title ?? 'No governed execution yet'}</small></article>
+          <article className="metric-card"><span>Security posture</span><strong>{securityPassed ? 'PASS' : 'UNKNOWN'}</strong><small>{Number(securityPayload.totalChecks ?? 0)} controls checked</small></article>
+        </section>
+
+        <section className="panel how-it-works">
+          <div className="panel-head"><div><span className="panel-label">HOW IT WORKS</span><h2>One governed path from task to merge</h2></div></div>
+          <div className="steps-grid">
+            {[
+              ['1', 'Human sponsors a task', 'A person defines the goal, repository, agent, and policy envelope.'],
+              ['2', 'Implementation agent makes the change', 'The coding agent works only inside its assigned execution boundary.'],
+              ['3', 'GitAgent isolates the execution', 'Branch, workspace, and capabilities stay bound to that execution.'],
+              ['4', 'Independent agent reviews it', 'A separate reviewer identity evaluates the pull request.'],
+              ['5', 'Human approves the merge', 'Agents are blocked from merging the change themselves.'],
+              ['6', 'GitAgent records the chain', 'Sponsorship, writes, denials, reviews, approvals, and merge are auditable.'],
+            ].map(([number, title, description]) => (
+              <div className="step-card" key={number}><span>{number}</span><strong>{title}</strong><small>{description}</small></div>
+            ))}
+          </div>
+        </section>
+
+        <section className="client-grid lower-grid">
+          <article className="panel">
+            <div className="panel-head"><div><span className="panel-label">RECENT AI CHANGES</span><h2>Latest governed work</h2></div><a className="text-link" href="/executions">View all →</a></div>
+            {executions.slice(0, 5).map((execution) => (
+              <a className="client-list-row execution-link" key={execution.id} href={`/executions/${execution.id}`}>
+                <div><strong>{execution.task.title}</strong><span>{execution.agent.name} · {execution.status}</span></div>
+                <span className="task-state">{execution.workspace?.status ?? 'NO WORKSPACE'}</span>
               </a>
             ))}
           </article>
 
           <article className="panel">
-            <div className="panel-head"><div><span className="panel-label">AGENTS</span><h2>Identity and trust</h2></div></div>
+            <div className="panel-head"><div><span className="panel-label">AI AGENTS</span><h2>Who can act</h2></div></div>
             {trust.map((agent) => (
               <div className="identity-row" key={agent.id}>
                 <span className="avatar">{agent.name.slice(0, 1).toUpperCase()}</span>
@@ -137,53 +199,32 @@ export default async function Home() {
               </div>
             ))}
           </article>
+        </section>
 
-          <article className="panel span-2">
-            <div className="panel-head"><div><span className="panel-label">APPROVALS</span><h2>Human gates</h2></div><a className="text-link" href="/approvals">Open approvals →</a></div>
-            {pendingApprovals.length === 0 ? <div className="separation-rule">No pending approvals.</div> : pendingApprovals.map((approval) => (
-              <div className="approval-row compact" key={approval.id}>
-                <div className="approval-main"><strong>{approval.action}</strong><span>{approval.task.title}</span><small>{approval.executionId ? `execution ${approval.executionId}` : 'historical / unbound'}</small></div>
-                <div className="approval-meta"><span>{approval.resourceType ?? '—'}</span><span>{approval.resourceId ?? '—'}</span></div>
-                <div className="approval-actions"><span className={`task-state ${approval.executionId ? '' : 'locked'}`}>{approval.executionId ? 'ACTIONABLE' : 'LOCKED'}</span></div>
-              </div>
-            ))}
-          </article>
-
+        <section className="client-grid lower-grid">
           <article className="panel">
-            <div className="panel-head"><div><span className="panel-label">TASKS</span><h2>Recent task state</h2></div><a className="text-link" href="/tasks/new">New task →</a></div>
+            <div className="panel-head"><div><span className="panel-label">SECURITY POSTURE</span><h2>Governance health</h2></div></div>
             <div className="guardrail-list">
-              {tasks.slice(0, 6).map((task) => <div key={task.id}><span>{task.title}</span><strong>{task.status}</strong></div>)}
+              <div><span>Security suite</span><strong>{securityPassed ? 'PASS' : 'UNKNOWN'}</strong></div>
+              <div><span>Independent reviewer</span><strong>{trust.length > 1 ? 'ENABLED' : 'CHECK'}</strong></div>
+              <div><span>Human merge gate</span><strong>REQUIRED</strong></div>
+              <div><span>Latest successful execution</span><strong>{latestSuccessful ? 'YES' : 'NONE'}</strong></div>
+              <div><span>Policy version</span><strong>2026-09-16.1</strong></div>
             </div>
           </article>
 
-          <article className="panel span-2">
-            <div className="panel-head"><div><span className="panel-label">AUDIT</span><h2>Recent governance evidence</h2></div><a className="text-link" href="/audit">Open audit →</a></div>
-            <div className="event-table">
+          <article className="panel">
+            <div className="panel-head"><div><span className="panel-label">RECENT EVIDENCE</span><h2>Audit activity</h2></div><a className="text-link" href="/audit">Open audit →</a></div>
+            <div className="event-table compact-events">
               {auditEvents.map((event) => {
                 const payload = payloadRecord(event.payload);
                 return (
                   <div className="event-row" key={event.id}>
                     <div className="event-summary">{event.eventType}</div>
-                    <div className="event-evidence">
-                      <span className="mono muted">{event.createdAt.toISOString().slice(11, 19)}</span>
-                      <span className="severity info">INFO</span>
-                      <strong className="mono">{event.actorType}</strong>
-                      <span>{event.actorId ?? 'system'}{typeof payload.reasonCode === 'string' ? ` · ${payload.reasonCode}` : ''}</span>
-                    </div>
+                    <div className="event-evidence"><span>{event.actorType}</span><span>{typeof payload.reasonCode === 'string' ? payload.reasonCode : 'recorded'}</span></div>
                   </div>
                 );
               })}
-            </div>
-          </article>
-
-          <article className="panel">
-            <div className="panel-head"><div><span className="panel-label">GUARDRAILS</span><h2>Policy boundary</h2></div></div>
-            <div className="guardrail-list">
-              <div><span>Self approval</span><strong className="deny">DENY</strong></div>
-              <div><span>Protected branch write</span><strong className="deny">DENY</strong></div>
-              <div><span>Cross-workspace write</span><strong className="deny">DENY</strong></div>
-              <div><span>Agent merge</span><strong className="deny">DENY</strong></div>
-              <div><span>Human merge gate</span><strong>REQUIRED</strong></div>
             </div>
           </article>
         </section>
