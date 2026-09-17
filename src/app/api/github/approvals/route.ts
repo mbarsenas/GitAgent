@@ -11,52 +11,52 @@ export async function GET() {
     const approvals = await prisma.approval.findMany({
       where: { status: 'PENDING', task: { repositoryId: repository.id } },
       orderBy: { requestedAt: 'asc' },
-      include: {
-        task: {
-          include: {
-            repository: true,
-            executions: { orderBy: { createdAt: 'desc' }, take: 1 },
-          },
+      include: { task: { include: { repository: true } } },
+    });
+
+    const items = approvals.map((approval) => {
+      const firstClassBound =
+        !!approval.executionId &&
+        !!approval.resourceType &&
+        !!approval.resourceId;
+
+      return {
+        approvalId: approval.id,
+        action: approval.action,
+        status: approval.status,
+        requestedAt: approval.requestedAt,
+        executionId: approval.executionId,
+        provenance: {
+          firstClassBound,
+          executionId: approval.executionId,
+          resourceType: approval.resourceType,
+          resourceId: approval.resourceId,
         },
-      },
+        task: {
+          id: approval.task.id,
+          title: approval.task.title,
+          status: approval.task.status,
+        },
+        repository: `${approval.task.repository.owner}/${approval.task.repository.name}`,
+        decisionEndpoint:
+          approval.action === 'restricted.execute'
+            ? '/api/github/restricted-approval'
+            : approval.action.startsWith('pr.merge:')
+              ? '/api/github/merge'
+              : null,
+        actionable: firstClassBound || approval.action === 'restricted.execute',
+        warning: firstClassBound
+          ? null
+          : 'Legacy/unbound approval. Reconcile provenance before execution-sensitive action.',
+      };
     });
 
     return NextResponse.json({
       ok: true,
-      count: approvals.length,
-      approvals: approvals.map((approval) => {
-        const executionId = approval.executionId ?? approval.task.executions[0]?.id ?? null;
-        const firstClassBound =
-          !!approval.executionId &&
-          !!approval.resourceType &&
-          !!approval.resourceId;
-
-        return {
-          approvalId: approval.id,
-          action: approval.action,
-          status: approval.status,
-          requestedAt: approval.requestedAt,
-          executionId,
-          provenance: {
-            firstClassBound,
-            executionId: approval.executionId,
-            resourceType: approval.resourceType,
-            resourceId: approval.resourceId,
-          },
-          task: {
-            id: approval.task.id,
-            title: approval.task.title,
-            status: approval.task.status,
-          },
-          repository: `${approval.task.repository.owner}/${approval.task.repository.name}`,
-          decisionEndpoint:
-            approval.action === 'restricted.execute'
-              ? '/api/github/restricted-approval'
-              : approval.action.startsWith('pr.merge:')
-                ? '/api/github/merge'
-                : null,
-        };
-      }),
+      count: items.length,
+      firstClassBound: items.filter((item) => item.provenance.firstClassBound).length,
+      unbound: items.filter((item) => !item.provenance.firstClassBound).length,
+      approvals: items,
     });
   } catch (error) {
     return NextResponse.json(
