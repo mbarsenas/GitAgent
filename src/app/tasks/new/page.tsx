@@ -1,6 +1,7 @@
 'use client';
 
 import { FormEvent, useEffect, useState } from 'react';
+import { ControlPlaneShell } from '@/app/components/control-plane-shell';
 
 type Option = { id: string; name?: string; slug?: string; email?: string; owner?: string };
 type TaskBootstrap = { repositories: Option[]; agents: Option[]; users: Option[] };
@@ -13,10 +14,12 @@ export default function NewTaskPage() {
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch('/api/tasks').then(async (r) => {
-      if (!r.ok) throw new Error('Failed to load task options');
-      setBootstrap(await r.json());
-    }).catch((e) => setError(e.message));
+    fetch('/api/tasks')
+      .then(async (response) => {
+        if (!response.ok) throw new Error('Failed to load task options');
+        setBootstrap(await response.json());
+      })
+      .catch((error) => setError(error.message));
   }, []);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -57,13 +60,12 @@ export default function NewTaskPage() {
   }
 
   return (
-    <main className="main-panel">
+    <ControlPlaneShell active="/tasks/new" title="Create agent task" subtitle="governed task">
       <div className="section-head">
         <div>
           <p className="kicker">Tasks / New governed task</p>
           <h1>Create agent task</h1>
         </div>
-        <a className="ghost-button" href="/">Back to control plane</a>
       </div>
 
       <section className="panel" style={{ maxWidth: 980 }}>
@@ -82,26 +84,40 @@ export default function NewTaskPage() {
 
           <label>
             <span className="label">Goal</span>
-            <textarea name="goal" required rows={5} defaultValue="Make a bounded repository change and open a pull request under GitAgent policy." style={{ width: '100%', marginTop: 6 }} />
+            <textarea
+              name="goal"
+              required
+              rows={5}
+              defaultValue="Make a bounded repository change and open a pull request under GitAgent policy."
+              style={{ width: '100%', marginTop: 6 }}
+            />
           </label>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12 }}>
             <label>
               <span className="label">Repository</span>
               <select name="repositoryId" required style={{ width: '100%', marginTop: 6 }}>
-                {bootstrap.repositories.map((repo) => <option key={repo.id} value={repo.id}>{repo.owner ? `${repo.owner} / ` : ''}{repo.name}</option>)}
+                {bootstrap.repositories.map((repo) => (
+                  <option key={repo.id} value={repo.id}>
+                    {repo.owner ? `${repo.owner} / ` : ''}{repo.name}
+                  </option>
+                ))}
               </select>
             </label>
             <label>
               <span className="label">Implementation agent</span>
               <select name="agentId" required style={{ width: '100%', marginTop: 6 }}>
-                {bootstrap.agents.map((agent) => <option key={agent.id} value={agent.id}>{agent.name ?? agent.slug}</option>)}
+                {bootstrap.agents.map((agent) => (
+                  <option key={agent.id} value={agent.id}>{agent.name ?? agent.slug}</option>
+                ))}
               </select>
             </label>
             <label>
               <span className="label">Human sponsor</span>
               <select name="initiatorId" required style={{ width: '100%', marginTop: 6 }}>
-                {bootstrap.users.map((user) => <option key={user.id} value={user.id}>{user.name ?? user.email}</option>)}
+                {bootstrap.users.map((user) => (
+                  <option key={user.id} value={user.id}>{user.name ?? user.email}</option>
+                ))}
               </select>
             </label>
           </div>
@@ -132,7 +148,9 @@ export default function NewTaskPage() {
           </label>
 
           <div>
-            <button className="solid-button" disabled={loading} type="submit">{loading ? 'Creating…' : 'Create governed task'}</button>
+            <button className="solid-button" disabled={loading} type="submit">
+              {loading ? 'Creating…' : 'Create governed task'}
+            </button>
           </div>
 
           {error && <p style={{ color: 'var(--danger)' }}>{error}</p>}
@@ -141,11 +159,11 @@ export default function NewTaskPage() {
               <strong>Task created successfully.</strong>
               <p className="mono muted">task: {result.taskId}</p>
               <p className="mono muted">execution: {result.executionId}</p>
-              <p><a className="text-link" href="/audit">Open audit timeline →</a></p>
+              <p><a className="text-link" href={`/executions/${result.executionId}`}>Open execution →</a></p>
             </div>
           )}
         </form>
       </section>
-    </main>
+    </ControlPlaneShell>
   );
 }
