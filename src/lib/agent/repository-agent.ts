@@ -1,6 +1,8 @@
 import { prisma } from '@/lib/db/prisma';
 import { createGovernedBranch } from '@/lib/github/governed-branch';
+import { createGovernedChange } from '@/lib/github/governed-change';
 import { createInstallationToken } from '@/lib/github/auth';
+import { performPullRequestReview } from '@/lib/github/review-boundary';
 import { authorizeWorkspaceWrite } from '@/lib/governance/workspace';
 import { grantMatchesTaskScope } from '@/lib/policy/task-scope';
 import { getAgentTrustState } from '@/lib/github/trust-lifecycle';
@@ -90,6 +92,25 @@ function validatePlan(plan: AgentPlan, inspected: Array<{ path: string; content:
         .join(', ')}`,
     );
   }
+}
+
+async function findIndependentReviewer(implementationAgentId: string, repositoryId: string, repository: string) {
+  const reviewers = await prisma.agent.findMany({
+    where: {
+      status: 'ACTIVE',
+      id: { not: implementationAgentId },
+      grants: {
+        some: {
+          capability: 'review.approve',
+          effect: 'ALLOW',
+          OR: [{ resource: '*' }, { resource: repositoryId }, { resource: repository }],
+          AND: [{ OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] }],
+        },
+      },
+    },
+    orderBy: { createdAt: 'asc' },
+  });
+  return reviewers[0] ?? null;
 }
 
 export async function runRepositoryAgent(executionId: string) {
@@ -189,8 +210,7 @@ export async function runRepositoryAgent(executionId: string) {
         actorId: 'gitagent',
         payload: {
           reasonCode: 'agent.llm_provider_not_configured',
-          message:
-            'Repository inspection completed, but OPENAI_API_KEY is not configured for implementation generation.',
+          message: 'Repository inspection completed, but OPENAI_API_KEY is not configured for implementation generation.',
           policyVersion: POLICY_VERSION,
         },
       },
@@ -251,20 +271,11 @@ export async function runRepositoryAgent(executionId: string) {
   }
 
   const branch = await createGovernedBranch(executionId);
-  const refreshedExecution = await prisma.execution.findUnique({
-    where: { id: executionId },
-    include: { workspace: true },
-  });
+  const refreshedExecution = await prisma.execution.findUnique({ where: { id: executionId }, include: { workspace: true } });
   if (!refreshedExecution?.workspace) throw new Error('Execution workspace was not provisioned with governed branch.');
 
-  const workspaceDecision = await authorizeWorkspaceWrite(
-    executionId,
-    refreshedExecution.workspace.workspaceKey,
-    agent.id,
-  );
-  if (!workspaceDecision.allowed) {
-    throw new Error('Policy denied branch.write: execution workspace ownership failed.');
-  }
+  const workspaceDecision = await authorizeWorkspaceWrite(executionId, refreshedExecution.workspace.workspaceKey, agent.id);
+  if (!workspaceDecision.allowed) throw new Error('Policy denied branch.write: execution workspace ownership failed.');
 
   const writeGrant = await requireGrant(agent.id, 'branch.write', repo.id, fullName, task.id, execution.id);
 
@@ -273,20 +284,15 @@ export async function runRepositoryAgent(executionId: string) {
       `${API}/repos/${repo.owner}/${repo.name}/contents/${encodeURIComponent(change.path)}?ref=${encodeURIComponent(branch.branch)}`,
       installation.token,
     );
-
-    await github(
-      `${API}/repos/${repo.owner}/${repo.name}/contents/${encodeURIComponent(change.path)}`,
-      installation.token,
-      {
-        method: 'PUT',
-        body: JSON.stringify({
-          message: change.message,
-          content: Buffer.from(change.content).toString('base64'),
-          sha: current.sha,
-          branch: branch.branch,
-        }),
-      },
-    );
+    await github(`${API}/repos/${repo.owner}/${repo.name}/contents/${encodeURIComponent(change.path)}`, installation.token, {
+      method: 'PUT',
+      body: JSON.stringify({
+        message: change.message,
+        content: Buffer.from(change.content).toString('base64'),
+        sha: current.sha,
+        branch: branch.branch,
+      }),
+    });
   }
 
   await prisma.auditEvent.create({
@@ -305,12 +311,48 @@ export async function runRepositoryAgent(executionId: string) {
     },
   });
 
+  const change = await createGovernedChange(executionId, branch.branch);
+  const reviewer = await findIndependentReviewer(agent.id, repo.id, fullName);
+  let review = null;
+  let approval = null;
+
+  if (reviewer) {
+    review = await performPullRequestReview(executionId, change.pullRequestNumber, reviewer.id, 'REVIEW');
+    if (review.allowed) {
+      approval = await performPullRequestReview(executionId, change.pullRequestNumber, reviewer.id, 'APPROVE');
+    }
+  } else {
+    await prisma.auditEvent.create({
+      data: {
+        taskId: task.id,
+        executionId,
+        eventType: 'agent.review.blocked',
+        actorType: 'system',
+        actorId: 'gitagent',
+        payload: {
+          repository: fullName,
+          pullRequestNumber: change.pullRequestNumber,
+          reasonCode: 'policy.independent_reviewer_not_found',
+          policyVersion: POLICY_VERSION,
+        },
+      },
+    });
+  }
+
+  await prisma.execution.update({ where: { id: execution.id }, data: { status: 'WAITING_APPROVAL' } });
+  await prisma.task.update({ where: { id: task.id }, data: { status: 'WAITING_APPROVAL' } });
+
   return {
     executionId,
     repository: fullName,
     branch: branch.branch,
     plan,
-    status: 'RUNNING' as const,
+    pullRequestNumber: change.pullRequestNumber,
+    pullRequestUrl: change.pullRequestUrl,
+    independentReviewer: reviewer ? { id: reviewer.id, name: reviewer.name } : null,
+    review,
+    approval,
+    status: 'WAITING_APPROVAL' as const,
     blocked: false,
   };
 }
