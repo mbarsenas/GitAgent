@@ -28,10 +28,12 @@ export async function GET() {
       reviewApproved,
       pendingApprovals,
       mergeRequests,
+      restrictedRequests,
       completed,
       failed,
       mergedEvents,
       sealedEvents,
+      reconciledEvents,
     ] = await Promise.all([
       getAgentTrustState(implementation.id),
       prisma.auditEvent.findFirst({ where: { eventType: 'security.suite.completed' }, orderBy: { createdAt: 'desc' } }),
@@ -47,11 +49,25 @@ export async function GET() {
         orderBy: { requestedAt: 'asc' },
         take: 100,
       }),
-      prisma.auditEvent.findMany({ where: { eventType: 'merge.approval.requested' }, orderBy: { createdAt: 'desc' }, take: 100 }),
+      prisma.auditEvent.findMany({
+        where: { eventType: 'merge.approval.requested', task: { repositoryId: canonical.id } },
+        orderBy: { createdAt: 'desc' },
+        take: 100,
+      }),
+      prisma.auditEvent.findMany({
+        where: { eventType: 'restricted.execution.approval_requested', task: { repositoryId: canonical.id } },
+        orderBy: { createdAt: 'desc' },
+        take: 100,
+      }),
       prisma.auditEvent.count({ where: { eventType: 'execution.completed', actorId: implementation.id } }),
       prisma.auditEvent.count({ where: { eventType: 'execution.failed', actorId: implementation.id } }),
       prisma.auditEvent.findMany({ where: { eventType: 'github.pr.merged' }, orderBy: { createdAt: 'desc' }, take: 100 }),
       prisma.auditEvent.findMany({ where: { eventType: 'workspace.sealed' }, orderBy: { createdAt: 'desc' }, take: 100 }),
+      prisma.auditEvent.findMany({
+        where: { eventType: 'approval.provenance.reconciled', task: { repositoryId: canonical.id } },
+        orderBy: { createdAt: 'desc' },
+        take: 100,
+      }),
     ]);
 
     const securityPayload = payloadRecord(securityRun?.payload);
@@ -65,27 +81,61 @@ export async function GET() {
       );
     });
 
-    const boundMergeRequests = mergeRequests.filter((event) => {
-      const payload = payloadRecord(event.payload);
-      return (
-        typeof payload.executionId === 'string' &&
-        typeof payload.pullRequestNumber === 'number' &&
-        typeof payload.approvalId === 'string' &&
-        payload.resourceType === 'github.pull_request' &&
-        typeof payload.resourceId === 'string'
-      );
-    });
+    const approvalHasExactBinding = (approval: (typeof pendingApprovals)[number]) => {
+      if (!approval.executionId || !approval.resourceType || !approval.resourceId) return false;
 
-    const boundPending = pendingApprovals.filter(
-      (approval) => !!approval.executionId && !!approval.resourceType && !!approval.resourceId,
-    );
-    const unboundPending = pendingApprovals.filter(
-      (approval) => !approval.executionId || !approval.resourceType || !approval.resourceId,
-    );
+      if (approval.action === 'restricted.execute') {
+        return restrictedRequests.some((event) => {
+          const payload = payloadRecord(event.payload);
+          return (
+            event.taskId === approval.taskId &&
+            event.executionId === approval.executionId &&
+            payload.approvalId === approval.id &&
+            payload.executionId === approval.executionId &&
+            payload.resourceType === approval.resourceType &&
+            payload.resourceId === approval.resourceId
+          );
+        });
+      }
+
+      if (approval.action.startsWith('pr.merge:')) {
+        return mergeRequests.some((event) => {
+          const payload = payloadRecord(event.payload);
+          return (
+            event.taskId === approval.taskId &&
+            event.executionId === approval.executionId &&
+            payload.approvalId === approval.id &&
+            payload.executionId === approval.executionId &&
+            payload.resourceType === approval.resourceType &&
+            payload.resourceId === approval.resourceId &&
+            String(payload.pullRequestNumber) === approval.resourceId
+          );
+        });
+      }
+
+      return false;
+    };
+
+    const boundPending = pendingApprovals.filter(approvalHasExactBinding);
+    const unboundPending = pendingApprovals.filter((approval) => !approvalHasExactBinding(approval));
 
     const mergedWithSealedWorkspace = mergedEvents.filter((merged) =>
       sealedEvents.some((sealed) => sealed.executionId && sealed.executionId === merged.executionId),
     );
+
+    const reconciliationValid = reconciledEvents.every((event) => {
+      const payload = payloadRecord(event.payload);
+      return (
+        typeof payload.approvalId === 'string' &&
+        typeof event.executionId === 'string' &&
+        payload.resourceType === 'github.pull_request' &&
+        typeof payload.resourceId === 'string' &&
+        typeof payload.pullRequestNumber === 'number' &&
+        String(payload.pullRequestNumber) === payload.resourceId &&
+        typeof payload.mergeRequestAuditEventId === 'string' &&
+        typeof payload.reviewApprovalAuditEventId === 'string'
+      );
+    });
 
     const checks = [
       { name: 'canonical_repository_identity', passed: repositories.length === 1 && canonical.externalId === '1373462743' },
@@ -94,8 +144,8 @@ export async function GET() {
       { name: 'self_approval_boundary_observed', passed: selfDenied > 0 },
       { name: 'agent_merge_boundary_observed', passed: mergeDenied >= 2 },
       { name: 'exact_independent_approval_observed', passed: exactApprovals.length > 0 },
-      { name: 'merge_approval_provenance_observed', passed: boundMergeRequests.length > 0 },
-      { name: 'pending_approvals_have_first_class_provenance', passed: unboundPending.length === 0 },
+      { name: 'pending_approvals_exactly_bound', passed: unboundPending.length === 0 },
+      { name: 'legacy_reconciliation_evidence_valid', passed: reconciliationValid },
       { name: 'merged_workspaces_sealed', passed: mergedEvents.length === 0 || mergedWithSealedWorkspace.length === mergedEvents.length },
       { name: 'execution_outcomes_audited', passed: completed + failed > 0 },
       { name: 'trust_state_available', passed: ['TRUSTED', 'RESTRICTED', 'QUARANTINED'].includes(trust) },
@@ -125,16 +175,21 @@ export async function GET() {
       trustState: trust,
       pendingApprovals: {
         total: pendingApprovals.length,
-        firstClassBound: boundPending.length,
+        exactlyBound: boundPending.length,
         unbound: unboundPending.map((approval) => ({
           id: approval.id,
           action: approval.action,
           taskId: approval.taskId,
+          executionId: approval.executionId,
+          resourceType: approval.resourceType,
+          resourceId: approval.resourceId,
         })),
       },
       evidence: {
         exactIndependentApprovals: exactApprovals.length,
-        boundMergeApprovalRequests: boundMergeRequests.length,
+        mergeApprovalRequests: mergeRequests.length,
+        restrictedApprovalRequests: restrictedRequests.length,
+        reconciledApprovalEvents: reconciledEvents.length,
         completedExecutions: completed,
         failedExecutions: failed,
         mergedEvents: mergedEvents.length,
