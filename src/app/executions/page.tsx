@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/db/prisma';
+import { ControlPlaneShell } from '@/app/components/control-plane-shell';
 
 export default async function ExecutionsPage() {
   const executions = await prisma.execution.findMany({
@@ -12,13 +13,12 @@ export default async function ExecutionsPage() {
   });
 
   return (
-    <main className="main-panel">
+    <ControlPlaneShell active="/executions" title="Governed executions" subtitle={`${executions.length} shown`}>
       <div className="section-head">
         <div>
           <p className="kicker">Control plane / Executions</p>
           <h1>Governed executions</h1>
         </div>
-        <a className="ghost-button" href="/">Overview</a>
       </div>
 
       <section className="panel">
@@ -47,6 +47,6 @@ export default async function ExecutionsPage() {
           ))
         )}
       </section>
-    </main>
+    </ControlPlaneShell>
   );
 }
