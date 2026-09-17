@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { ControlPlaneShell } from '@/app/components/control-plane-shell';
 
 type Approval = {
   approvalId: string;
@@ -122,16 +123,13 @@ export default function ApprovalsPage() {
   }
 
   return (
-    <main className="main-panel">
+    <ControlPlaneShell active="/approvals" title="Human decisions" subtitle={`${data?.count ?? 0} pending`}>
       <div className="section-head">
         <div>
           <p className="kicker">Control plane / Approvals</p>
           <h1>Human decisions</h1>
         </div>
-        <div className="chrome-actions">
-          <a className="ghost-button" href="/">Overview</a>
-          <button className="ghost-button" onClick={refresh} disabled={loading}>Refresh</button>
-        </div>
+        <button className="ghost-button" onClick={refresh} disabled={loading}>Refresh</button>
       </div>
 
       <section className="command-strip approvals-summary">
@@ -211,6 +209,6 @@ export default function ApprovalsPage() {
           ))
         )}
       </section>
-    </main>
+    </ControlPlaneShell>
   );
 }
