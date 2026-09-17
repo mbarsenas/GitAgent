@@ -1,0 +1,13 @@
+CREATE TYPE "WorkspaceStatus" AS ENUM ('ACTIVE','SEALED','DESTROYED');
+ALTER TABLE "Approval" ADD COLUMN "executionId" TEXT, ADD COLUMN "resourceType" TEXT, ADD COLUMN "resourceId" TEXT;
+CREATE TABLE "ExecutionWorkspace" ("id" TEXT NOT NULL,"executionId" TEXT NOT NULL,"repositoryId" TEXT NOT NULL,"ownerAgentId" TEXT NOT NULL,"workspaceKey" TEXT NOT NULL,"branch" TEXT,"writable" BOOLEAN NOT NULL DEFAULT true,"status" "WorkspaceStatus" NOT NULL DEFAULT 'ACTIVE',"createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,"sealedAt" TIMESTAMP(3),"destroyedAt" TIMESTAMP(3),CONSTRAINT "ExecutionWorkspace_pkey" PRIMARY KEY ("id"));
+CREATE UNIQUE INDEX "ExecutionWorkspace_executionId_key" ON "ExecutionWorkspace"("executionId");
+CREATE UNIQUE INDEX "ExecutionWorkspace_workspaceKey_key" ON "ExecutionWorkspace"("workspaceKey");
+CREATE INDEX "ExecutionWorkspace_repositoryId_status_idx" ON "ExecutionWorkspace"("repositoryId","status");
+CREATE INDEX "ExecutionWorkspace_ownerAgentId_status_idx" ON "ExecutionWorkspace"("ownerAgentId","status");
+CREATE INDEX "Approval_executionId_status_idx" ON "Approval"("executionId","status");
+CREATE INDEX "Approval_taskId_action_status_idx" ON "Approval"("taskId","action","status");
+ALTER TABLE "ExecutionWorkspace" ADD CONSTRAINT "ExecutionWorkspace_executionId_fkey" FOREIGN KEY ("executionId") REFERENCES "Execution"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "ExecutionWorkspace" ADD CONSTRAINT "ExecutionWorkspace_repositoryId_fkey" FOREIGN KEY ("repositoryId") REFERENCES "Repository"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "ExecutionWorkspace" ADD CONSTRAINT "ExecutionWorkspace_ownerAgentId_fkey" FOREIGN KEY ("ownerAgentId") REFERENCES "Agent"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
+ALTER TABLE "Approval" ADD CONSTRAINT "Approval_executionId_fkey" FOREIGN KEY ("executionId") REFERENCES "Execution"("id") ON DELETE SET NULL ON UPDATE CASCADE;
