@@ -7,6 +7,7 @@ import { authorizeWorkspaceWrite } from '@/lib/governance/workspace';
 import { grantMatchesTaskScope } from '@/lib/policy/task-scope';
 import { getAgentTrustState } from '@/lib/github/trust-lifecycle';
 import { generateCodingPlan, isImplementationLlmConfigured } from './llm';
+import { validateRepositorySnapshot } from './validation';
 
 const API = 'https://api.github.com';
 const VERSION = '2022-11-28';
@@ -277,6 +278,60 @@ export async function runRepositoryAgent(executionId: string) {
   const workspaceDecision = await authorizeWorkspaceWrite(executionId, refreshedExecution.workspace.workspaceKey, agent.id);
   if (!workspaceDecision.allowed) throw new Error('Policy denied branch.write: execution workspace ownership failed.');
 
+  const validation = await validateRepositorySnapshot({
+    owner: repo.owner,
+    name: repo.name,
+    branch: repo.defaultBranch,
+    files: plan.proposedChanges.map((change) => ({ path: change.path, content: change.content })),
+  });
+
+  await prisma.auditEvent.create({
+    data: {
+      taskId: task.id,
+      executionId,
+      eventType: 'agent.validation.completed',
+      actorType: 'agent',
+      actorId: agent.id,
+      payload: {
+        repository: fullName,
+        projectType: validation.projectType,
+        passed: validation.passed,
+        commands: validation.commands,
+        policyVersion: POLICY_VERSION,
+      },
+    },
+  });
+
+  if (!validation.passed) {
+    await prisma.execution.update({ where: { id: execution.id }, data: { status: 'FAILED', finishedAt: new Date() } });
+    await prisma.task.update({ where: { id: task.id }, data: { status: 'FAILED' } });
+    await prisma.auditEvent.create({
+      data: {
+        taskId: task.id,
+        executionId,
+        eventType: 'agent.validation.failed',
+        actorType: 'system',
+        actorId: 'gitagent',
+        payload: {
+          reasonCode: 'agent.validation_failed',
+          projectType: validation.projectType,
+          commands: validation.commands,
+          policyVersion: POLICY_VERSION,
+        },
+      },
+    });
+    return {
+      executionId,
+      repository: fullName,
+      branch: branch.branch,
+      plan,
+      validation,
+      status: 'FAILED' as const,
+      blocked: true,
+      reasonCode: 'agent.validation_failed',
+    };
+  }
+
   const writeGrant = await requireGrant(agent.id, 'branch.write', repo.id, fullName, task.id, execution.id);
 
   for (const change of plan.proposedChanges) {
@@ -306,6 +361,7 @@ export async function runRepositoryAgent(executionId: string) {
         branch: branch.branch,
         capabilityGrantId: writeGrant.id,
         files: plan.proposedChanges.map((change) => change.path),
+        validationPassed: true,
         policyVersion: POLICY_VERSION,
       },
     },
@@ -347,6 +403,7 @@ export async function runRepositoryAgent(executionId: string) {
     repository: fullName,
     branch: branch.branch,
     plan,
+    validation,
     pullRequestNumber: change.pullRequestNumber,
     pullRequestUrl: change.pullRequestUrl,
     independentReviewer: reviewer ? { id: reviewer.id, name: reviewer.name } : null,
