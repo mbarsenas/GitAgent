@@ -44,10 +44,10 @@ export async function GET() {
             : approval.action.startsWith('pr.merge:')
               ? '/api/github/merge'
               : null,
-        actionable: firstClassBound || approval.action === 'restricted.execute',
+        actionable: firstClassBound,
         warning: firstClassBound
           ? null
-          : 'Legacy/unbound approval. Reconcile provenance before execution-sensitive action.',
+          : 'Legacy/unbound approval. Reconcile provenance before any execution-sensitive action.',
       };
     });
 
