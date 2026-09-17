@@ -1,16 +1,196 @@
-generator client { provider = "prisma-client-js" }
-datasource db { provider = "postgresql" url = env("DATABASE_URL") }
-enum AgentStatus { ACTIVE DISABLED }
-enum TaskStatus { QUEUED RUNNING WAITING_APPROVAL SUCCEEDED FAILED CANCELLED }
-enum ExecutionStatus { CREATED RUNNING SUCCEEDED FAILED CANCELLED }
-enum ApprovalStatus { PENDING APPROVED REJECTED EXPIRED }
-enum WorkspaceStatus { ACTIVE SEALED DESTROYED }
-model User { id String @id @default(cuid()) email String @unique name String? createdAt DateTime @default(now()) tasks Task[] @relation("TaskInitiator") approvals Approval[] @relation("ApprovalActor") }
-model Repository { id String @id @default(cuid()) provider String externalId String owner String name String defaultBranch String @default("main") createdAt DateTime @default(now()) updatedAt DateTime @updatedAt tasks Task[] agents Agent[] workspaces ExecutionWorkspace[] @@unique([provider, externalId]) }
-model Agent { id String @id @default(cuid()) name String slug String @unique status AgentStatus @default(ACTIVE) providerKey String model String repositoryId String? repository Repository? @relation(fields:[repositoryId],references:[id]) createdAt DateTime @default(now()) updatedAt DateTime @updatedAt grants CapabilityGrant[] tasks Task[] executions Execution[] workspaces ExecutionWorkspace[] }
-model Task { id String @id @default(cuid()) title String goal String status TaskStatus @default(QUEUED) repositoryId String repository Repository @relation(fields:[repositoryId],references:[id]) agentId String? agent Agent? @relation(fields:[agentId],references:[id]) initiatorId String initiator User @relation("TaskInitiator",fields:[initiatorId],references:[id]) maxCostUsd Decimal? @db.Decimal(10,4) maxTokens Int? requiresHumanApproval Boolean @default(false) createdAt DateTime @default(now()) updatedAt DateTime @updatedAt executions Execution[] approvals Approval[] auditEvents AuditEvent[] }
-model Execution { id String @id @default(cuid()) taskId String task Task @relation(fields:[taskId],references:[id]) agentId String agent Agent @relation(fields:[agentId],references:[id]) status ExecutionStatus @default(CREATED) providerKey String model String startedAt DateTime? finishedAt DateTime? inputTokens Int? outputTokens Int? costUsd Decimal? @db.Decimal(10,4) createdAt DateTime @default(now()) auditEvents AuditEvent[] workspace ExecutionWorkspace? approvals Approval[] }
-model ExecutionWorkspace { id String @id @default(cuid()) executionId String @unique execution Execution @relation(fields:[executionId],references:[id]) repositoryId String repository Repository @relation(fields:[repositoryId],references:[id]) ownerAgentId String ownerAgent Agent @relation(fields:[ownerAgentId],references:[id]) workspaceKey String @unique branch String? writable Boolean @default(true) status WorkspaceStatus @default(ACTIVE) createdAt DateTime @default(now()) sealedAt DateTime? destroyedAt DateTime? @@index([repositoryId,status]) @@index([ownerAgentId,status]) }
-model CapabilityGrant { id String @id @default(cuid()) agentId String agent Agent @relation(fields:[agentId],references:[id]) capability String resource String effect String @default("ALLOW") conditions Json? createdAt DateTime @default(now()) expiresAt DateTime? @@index([agentId,capability]) }
-model Approval { id String @id @default(cuid()) taskId String task Task @relation(fields:[taskId],references:[id]) executionId String? execution Execution? @relation(fields:[executionId],references:[id]) action String resourceType String? resourceId String? status ApprovalStatus @default(PENDING) requestedAt DateTime @default(now()) decidedAt DateTime? actorId String? actor User? @relation("ApprovalActor",fields:[actorId],references:[id]) reason String? @@index([executionId,status]) @@index([taskId,action,status]) }
-model AuditEvent { id String @id @default(cuid()) taskId String? task Task? @relation(fields:[taskId],references:[id]) executionId String? execution Execution? @relation(fields:[executionId],references:[id]) eventType String actorType String actorId String? payload Json createdAt DateTime @default(now()) @@index([taskId,createdAt]) @@index([executionId,createdAt]) }
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum AgentStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum TaskStatus {
+  QUEUED
+  RUNNING
+  WAITING_APPROVAL
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
+enum ExecutionStatus {
+  CREATED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  EXPIRED
+}
+
+enum WorkspaceStatus {
+  ACTIVE
+  SEALED
+  DESTROYED
+}
+
+model User {
+  id        String     @id @default(cuid())
+  email     String     @unique
+  name      String?
+  createdAt DateTime   @default(now())
+  tasks     Task[]     @relation("TaskInitiator")
+  approvals Approval[] @relation("ApprovalActor")
+}
+
+model Repository {
+  id            String               @id @default(cuid())
+  provider      String
+  externalId    String
+  owner         String
+  name          String
+  defaultBranch String               @default("main")
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+  tasks         Task[]
+  agents        Agent[]
+  workspaces    ExecutionWorkspace[]
+
+  @@unique([provider, externalId])
+}
+
+model Agent {
+  id           String               @id @default(cuid())
+  name         String
+  slug         String               @unique
+  status       AgentStatus          @default(ACTIVE)
+  providerKey  String
+  model        String
+  repositoryId String?
+  repository   Repository?          @relation(fields: [repositoryId], references: [id])
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+  grants       CapabilityGrant[]
+  tasks        Task[]
+  executions   Execution[]
+  workspaces   ExecutionWorkspace[]
+}
+
+model Task {
+  id                    String      @id @default(cuid())
+  title                 String
+  goal                  String
+  status                TaskStatus  @default(QUEUED)
+  repositoryId          String
+  repository            Repository  @relation(fields: [repositoryId], references: [id])
+  agentId               String?
+  agent                 Agent?      @relation(fields: [agentId], references: [id])
+  initiatorId           String
+  initiator             User        @relation("TaskInitiator", fields: [initiatorId], references: [id])
+  maxCostUsd            Decimal?    @db.Decimal(10, 4)
+  maxTokens             Int?
+  requiresHumanApproval Boolean     @default(false)
+  createdAt             DateTime    @default(now())
+  updatedAt             DateTime    @updatedAt
+  executions            Execution[]
+  approvals             Approval[]
+  auditEvents           AuditEvent[]
+}
+
+model Execution {
+  id           String              @id @default(cuid())
+  taskId       String
+  task         Task                @relation(fields: [taskId], references: [id])
+  agentId      String
+  agent        Agent               @relation(fields: [agentId], references: [id])
+  status       ExecutionStatus     @default(CREATED)
+  providerKey  String
+  model        String
+  startedAt    DateTime?
+  finishedAt   DateTime?
+  inputTokens  Int?
+  outputTokens Int?
+  costUsd      Decimal?            @db.Decimal(10, 4)
+  createdAt    DateTime            @default(now())
+  auditEvents  AuditEvent[]
+  workspace    ExecutionWorkspace?
+  approvals    Approval[]
+}
+
+model ExecutionWorkspace {
+  id           String          @id @default(cuid())
+  executionId  String          @unique
+  execution    Execution       @relation(fields: [executionId], references: [id])
+  repositoryId String
+  repository   Repository      @relation(fields: [repositoryId], references: [id])
+  ownerAgentId String
+  ownerAgent   Agent           @relation(fields: [ownerAgentId], references: [id])
+  workspaceKey String          @unique
+  branch       String?
+  writable     Boolean         @default(true)
+  status       WorkspaceStatus @default(ACTIVE)
+  createdAt    DateTime        @default(now())
+  sealedAt     DateTime?
+  destroyedAt  DateTime?
+
+  @@index([repositoryId, status])
+  @@index([ownerAgentId, status])
+}
+
+model CapabilityGrant {
+  id         String   @id @default(cuid())
+  agentId    String
+  agent      Agent    @relation(fields: [agentId], references: [id])
+  capability String
+  resource   String
+  effect     String   @default("ALLOW")
+  conditions Json?
+  createdAt  DateTime @default(now())
+  expiresAt  DateTime?
+
+  @@index([agentId, capability])
+}
+
+model Approval {
+  id           String         @id @default(cuid())
+  taskId       String
+  task         Task           @relation(fields: [taskId], references: [id])
+  executionId  String?
+  execution    Execution?     @relation(fields: [executionId], references: [id])
+  action       String
+  resourceType String?
+  resourceId   String?
+  status       ApprovalStatus @default(PENDING)
+  requestedAt  DateTime       @default(now())
+  decidedAt    DateTime?
+  actorId      String?
+  actor        User?          @relation("ApprovalActor", fields: [actorId], references: [id])
+  reason       String?
+
+  @@index([executionId, status])
+  @@index([taskId, action, status])
+}
+
+model AuditEvent {
+  id          String     @id @default(cuid())
+  taskId      String?
+  task        Task?      @relation(fields: [taskId], references: [id])
+  executionId String?
+  execution   Execution? @relation(fields: [executionId], references: [id])
+  eventType   String
+  actorType   String
+  actorId     String?
+  payload     Json
+  createdAt   DateTime   @default(now())
+
+  @@index([taskId, createdAt])
+  @@index([executionId, createdAt])
+}
