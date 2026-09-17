@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/db/prisma';
+import { grantMatchesTaskScope } from '@/lib/policy/task-scope';
 import { createInstallationToken } from './auth';
 
 const API = 'https://api.github.com';
@@ -21,8 +22,8 @@ async function github<T>(url: string, token: string, init: RequestInit = {}) {
   return (await response.json()) as T;
 }
 
-async function requireGrant(agentId: string, capability: string, repositoryId: string, fullName: string) {
-  const grant = await prisma.capabilityGrant.findFirst({
+async function requireGrant(agentId: string, capability: string, repositoryId: string, fullName: string, taskId: string, executionId: string) {
+  const candidates = await prisma.capabilityGrant.findMany({
     where: {
       agentId,
       capability,
@@ -31,7 +32,8 @@ async function requireGrant(agentId: string, capability: string, repositoryId: s
       AND: [{ OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] }],
     },
   });
-  if (!grant) throw new Error(`Policy denied ${capability}: no active ALLOW capability grant.`);
+  const grant = candidates.find((item) => grantMatchesTaskScope(item.conditions, taskId, executionId));
+  if (!grant) throw new Error(`Policy denied ${capability}: no active task-scoped ALLOW capability grant.`);
   return grant;
 }
 
@@ -48,8 +50,8 @@ export async function createGovernedChange(executionId: string, branch: string) 
   if (task.agentId !== agent.id) throw new Error('Execution agent is not assigned to this task.');
   if (!branch.startsWith('gitagent/')) throw new Error('Policy denied branch.write: target is not a GitAgent branch.');
 
-  const writeGrant = await requireGrant(agent.id, 'branch.write', repo.id, fullName);
-  const prGrant = await requireGrant(agent.id, 'pr.create', repo.id, fullName);
+  const writeGrant = await requireGrant(agent.id, 'branch.write', repo.id, fullName, task.id, execution.id);
+  const prGrant = await requireGrant(agent.id, 'pr.create', repo.id, fullName, task.id, execution.id);
   const installation = await createInstallationToken();
 
   const path = `.gitagent/proofs/${execution.id}.md`;
@@ -64,7 +66,7 @@ export async function createGovernedChange(executionId: string, branch: string) 
 
   await prisma.auditEvent.create({ data: {
     taskId: task.id, executionId: execution.id, eventType: 'github.commit.created', actorType: 'agent', actorId: agent.id,
-    payload: { repository: fullName, branch, path, commitSha: commit.commit.sha, capabilityGrantId: writeGrant.id, policyVersion: '2026-09-16.1', result: 'success' },
+    payload: { repository: fullName, branch, path, commitSha: commit.commit.sha, capabilityGrantId: writeGrant.id, policyVersion: '2026-09-16.1', result: 'success', metadata: { taskScoped: true, taskId: task.id, executionId: execution.id } },
   }});
 
   const pr = await github<{ number: number; html_url: string; draft: boolean }>(
@@ -75,7 +77,7 @@ export async function createGovernedChange(executionId: string, branch: string) 
 
   await prisma.auditEvent.create({ data: {
     taskId: task.id, executionId: execution.id, eventType: 'github.pr.created', actorType: 'agent', actorId: agent.id,
-    payload: { repository: fullName, branch, baseBranch: repo.defaultBranch, pullRequestNumber: pr.number, pullRequestUrl: pr.html_url, draft: pr.draft, capabilityGrantId: prGrant.id, policyVersion: '2026-09-16.1', result: 'success' },
+    payload: { repository: fullName, branch, baseBranch: repo.defaultBranch, pullRequestNumber: pr.number, pullRequestUrl: pr.html_url, draft: pr.draft, capabilityGrantId: prGrant.id, policyVersion: '2026-09-16.1', result: 'success', metadata: { taskScoped: true, taskId: task.id, executionId: execution.id } },
   }});
 
   return { repository: fullName, branch, path, commitSha: commit.commit.sha, pullRequestNumber: pr.number, pullRequestUrl: pr.html_url, draft: pr.draft };
