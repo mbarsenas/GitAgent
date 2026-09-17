@@ -35,8 +35,8 @@ export async function POST() {
   const execution = task.executions[0];
 
   const result = await performGovernedTaskAction({
-    role: 'implementation-agent',
-    capability: 'review.approve',
+    role: 'IMPLEMENTATION',
+    capability: 'pr.approve',
     actorId: task.agent.id,
     targetOwnerAgentId: task.agent.id,
     taskId: task.id,
