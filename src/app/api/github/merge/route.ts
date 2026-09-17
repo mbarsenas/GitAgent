@@ -2,24 +2,9 @@ import { NextResponse } from 'next/server';
 import {
   executeApprovedMerge,
   executeHumanApprovedMerge,
+  MergePolicyError,
   recordHumanMergeDecision,
 } from '@/lib/github/merge-boundary';
-
-function statusForError(message: string) {
-  if (message.includes('not found')) return 404;
-  if (message.includes('Human actor')) return 403;
-  if (
-    message.includes('already decided') ||
-    message.includes('must be APPROVED') ||
-    message.includes('binding') ||
-    message.includes('provenance') ||
-    message.includes('draft') ||
-    message.includes('state is')
-  ) {
-    return 409;
-  }
-  return 500;
-}
 
 export async function POST(request: Request) {
   try {
@@ -73,10 +58,29 @@ export async function POST(request: Request) {
       ...result,
     });
   } catch (error) {
+    if (error instanceof MergePolicyError) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: error.message,
+          code: error.code,
+          phase: 'merge-control',
+          recoveryAware: true,
+        },
+        { status: error.httpStatus },
+      );
+    }
+
     const message = error instanceof Error ? error.message : String(error);
     return NextResponse.json(
-      { ok: false, error: message, phase: 'merge-control', recoveryAware: true },
-      { status: statusForError(message) },
+      {
+        ok: false,
+        error: message,
+        code: 'merge.internal_error',
+        phase: 'merge-control',
+        recoveryAware: true,
+      },
+      { status: 500 },
     );
   }
 }
