@@ -12,8 +12,16 @@ export type GithubAuditBase = {
 async function writeGithubAuditEvent(
   base: GithubAuditBase,
   eventType: string,
-  metadata: Record<string, unknown>,
+  metadata: Prisma.InputJsonObject,
 ) {
+  const payload: Prisma.InputJsonObject = {
+    repositoryId: base.repositoryId,
+    policyVersion: base.policyVersion,
+    reasonCode: 'github.operation_succeeded',
+    severity: 'info',
+    metadata,
+  };
+
   return prisma.auditEvent.create({
     data: {
       taskId: base.taskId,
@@ -21,13 +29,7 @@ async function writeGithubAuditEvent(
       eventType,
       actorType: 'implementation-agent',
       actorId: base.actorId,
-      payload: {
-        repositoryId: base.repositoryId,
-        policyVersion: base.policyVersion,
-        reasonCode: 'github.operation_succeeded',
-        severity: 'info',
-        metadata,
-      } satisfies Prisma.InputJsonValue,
+      payload,
     },
   });
 }
@@ -43,12 +45,26 @@ export function recordGithubCommitCreated(
   base: GithubAuditBase,
   input: { branch: string; commitSha: string; path?: string; message?: string },
 ) {
-  return writeGithubAuditEvent(base, 'github.commit.created', input);
+  const metadata: Prisma.InputJsonObject = {
+    branch: input.branch,
+    commitSha: input.commitSha,
+    ...(input.path !== undefined ? { path: input.path } : {}),
+    ...(input.message !== undefined ? { message: input.message } : {}),
+  };
+  return writeGithubAuditEvent(base, 'github.commit.created', metadata);
 }
 
 export function recordGithubPullRequestCreated(
   base: GithubAuditBase,
   input: { pullRequestNumber: number; title: string; head: string; base: string; draft: boolean; url?: string },
 ) {
-  return writeGithubAuditEvent(base, 'github.pr.created', input);
+  const metadata: Prisma.InputJsonObject = {
+    pullRequestNumber: input.pullRequestNumber,
+    title: input.title,
+    head: input.head,
+    base: input.base,
+    draft: input.draft,
+    ...(input.url !== undefined ? { url: input.url } : {}),
+  };
+  return writeGithubAuditEvent(base, 'github.pr.created', metadata);
 }
