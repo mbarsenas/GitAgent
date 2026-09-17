@@ -8,8 +8,8 @@ describe("governance enforcement audit", () => {
 
     const decision = await enforceCapability(
       {
-        role: "implementation-agent",
-        capability: "review.approve",
+        role: "IMPLEMENTATION",
+        capability: "pr.approve",
         actorId: "agent-impl-1",
         targetOwnerAgentId: "agent-impl-1",
         taskId: "task-1",
@@ -28,7 +28,7 @@ describe("governance enforcement audit", () => {
     expect(events[0].eventType).toBe("capability.denied");
     expect(events[0].reasonCode).toBe("policy.self_approval_denied");
     expect(events[0].severity).toBe("high");
-    expect(events[0].metadata).toMatchObject({ capability: "review.approve" });
+    expect(events[0].metadata).toMatchObject({ capability: "pr.approve" });
   });
 
   it("records successful capability checks as auditable events", async () => {
@@ -36,8 +36,8 @@ describe("governance enforcement audit", () => {
 
     const decision = await enforceCapability(
       {
-        role: "review-agent",
-        capability: "review.approve",
+        role: "REVIEW",
+        capability: "pr.approve",
         actorId: "agent-review-1",
         targetOwnerAgentId: "agent-impl-1",
         taskId: "task-1",
