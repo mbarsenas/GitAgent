@@ -60,16 +60,31 @@ export default function NewTaskPage() {
         }),
       });
 
-      const body = await response.json();
-      if (!response.ok) throw new Error(body.error ?? 'Task creation failed');
+      const responseText = await response.text();
+      let body: { taskId?: string; executionId?: string; error?: string } = {};
+      try {
+        body = responseText ? JSON.parse(responseText) : {};
+      } catch {
+        throw new Error(`Task creation returned an invalid response (HTTP ${response.status}).`);
+      }
+      if (!response.ok) throw new Error(body.error ?? `Task creation failed (HTTP ${response.status})`);
+      if (!body.taskId || !body.executionId) throw new Error('Task creation returned no task or execution ID.');
 
       const runResponse = await fetch('/api/agent/run', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({ executionId: body.executionId }),
       });
-      const runBody = await runResponse.json();
-      if (!runResponse.ok) throw new Error(runBody.error ?? 'Agent execution failed');
+      const runText = await runResponse.text();
+      let runBody: AgentRunResult & { error?: string } = {};
+      try {
+        runBody = runText ? JSON.parse(runText) : {};
+      } catch {
+        throw new Error(
+          `Agent execution returned an invalid or empty response (HTTP ${runResponse.status}). Check the Next.js terminal for the server-side error.`,
+        );
+      }
+      if (!runResponse.ok) throw new Error(runBody.error ?? `Agent execution failed (HTTP ${runResponse.status})`);
 
       setResult({
         taskId: body.taskId,
