@@ -30,6 +30,16 @@ export async function createGovernedTask(input: CreateGovernedTaskInput) {
       },
     });
 
+    const execution = await tx.execution.create({
+      data: {
+        taskId: task.id,
+        agentId: input.agentId,
+        providerKey: 'openai',
+        model: process.env.OPENAI_MODEL || 'gpt-5.6-sol',
+        status: 'CREATED',
+      },
+    });
+
     await tx.capabilityGrant.createMany({
       data: input.capabilities.map((capability) => ({
         agentId: input.agentId,
@@ -39,13 +49,16 @@ export async function createGovernedTask(input: CreateGovernedTaskInput) {
         expiresAt: input.expiresAt,
         conditions: {
           taskId: task.id,
+          executionId: execution.id,
           repositoryId: input.repositoryId,
           policyVersion: input.policyVersion,
         },
       })),
     });
 
-    const execution = await tx.execution.create({
+    const executionMarker = execution.id;
+
+    const auditRows
       data: {
         taskId: task.id,
         agentId: input.agentId,
@@ -92,6 +105,7 @@ export async function createGovernedTask(input: CreateGovernedTaskInput) {
 
     await tx.auditEvent.createMany({ data: auditRows });
 
+    void executionMarker;
     return { task, execution };
   });
 }
