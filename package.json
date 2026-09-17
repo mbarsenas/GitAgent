@@ -13,9 +13,6 @@
     "db:seed": "prisma db seed",
     "db:studio": "prisma studio"
   },
-  "prisma": {
-    "seed": "tsx prisma/seed.ts"
-  },
   "dependencies": {
     "@prisma/client": "^6.16.1",
     "next": "^15.5.3",
