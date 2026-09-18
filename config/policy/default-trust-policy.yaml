@@ -1,0 +1,59 @@
+version: 1
+name: gitagent-default-trust-policy
+description: Opinionated baseline trust policy for GitAgent MVP. Organizations may override values through versioned policy configuration.
+
+restriction:
+  substantive_rejections:
+    threshold: 3
+    window_runs: 10
+    action: restrict
+  minor_style_rejections:
+    threshold: 5
+    window_runs: 10
+    action: require_review
+
+quarantine:
+  critical_review_finding:
+    threshold: 1
+    action: quarantine
+  forbidden_capability_attempt:
+    threshold: 1
+    action: quarantine
+  branch_protection_bypass:
+    threshold: 1
+    action: quarantine
+  high_severity_trust_findings:
+    threshold: 2
+    window_runs: 10
+    action: quarantine
+
+rehabilitation:
+  required_clean_runs: 5
+  evaluation_window_runs: 8
+  max_medium_findings: 0
+  max_high_findings: 0
+  max_critical_findings: 0
+  require_all_mandatory_tests_pass: true
+  allow_human_override_during_window: false
+  allow_revert_during_window: false
+  allow_policy_violation_during_window: false
+  reset_on_substantive_violation: true
+  critical_or_security_violation_action: quarantine
+  restore_scope: prior_task_scoped_capabilities
+  never_auto_grant:
+    - merge
+    - secrets.read
+    - deploy.production
+
+quarantine_review:
+  auto_clear: false
+  human_decision_required: true
+  decisions:
+    - reinstate
+    - revoke
+  require_evidence_package: true
+
+policy_audit:
+  record_policy_version: true
+  record_rule_identifier: true
+  record_triggering_evidence: true

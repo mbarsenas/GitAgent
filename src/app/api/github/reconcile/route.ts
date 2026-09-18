@@ -1,0 +1,4 @@
+import { NextResponse } from 'next/server';
+import { syncGitHubInstallationRepositories } from '@/lib/github/sync';
+import { prisma } from '@/lib/db/prisma';
+export async function POST(){try{const result=await syncGitHubInstallationRepositories();const repos=await prisma.repository.findMany({where:{provider:'github',owner:'mbarsenas',name:'GitAgent'},orderBy:{createdAt:'asc'}});const canonical=repos.find(r=>r.externalId==='1373462743');return NextResponse.json({ok:true,reconciled:true,canonicalRepository:canonical?{id:canonical.id,externalId:canonical.externalId,fullName:`${canonical.owner}/${canonical.name}`} : null,remainingDuplicates:canonical?repos.filter(r=>r.id!==canonical.id).length:repos.length,syncedRepositories:result.repositories.map(r=>({id:r.id,externalId:r.externalId,fullName:`${r.owner}/${r.name}`}))});}catch(error){return NextResponse.json({ok:false,error:error instanceof Error?error.message:String(error)},{status:500});}}
