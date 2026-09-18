@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation';
 import { prisma } from '@/lib/db/prisma';
+import { ControlPlaneShell } from '@/app/components/control-plane-shell';
 
 type PageProps = { params: Promise<{ id: string }> };
 
