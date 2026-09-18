@@ -13,6 +13,8 @@ GitAgent is an AI-native Git collaboration platform designed around first-class 
 
 ## Core workflow
 
+Before pull-request review, GitAgent validates generated coding changes and, when validation fails, attempts bounded repairs before surfacing the result for review.
+
 ```text
 Idea
   ↓
