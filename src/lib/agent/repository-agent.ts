@@ -209,7 +209,7 @@ export async function runRepositoryAgent(executionId: string) {
   });
 
   if (!isImplementationLlmConfigured()) {
-    await prisma.execution.update({ where: { id: execution.id }, data: { status: 'WAITING_APPROVAL' } });
+    await prisma.execution.update({ where: { id: execution.id }, data: { status: 'SUCCEEDED', finishedAt: new Date() } });
     await prisma.task.update({ where: { id: task.id }, data: { status: 'WAITING_APPROVAL' } });
     await prisma.auditEvent.create({
       data: {
@@ -491,7 +491,7 @@ export async function runRepositoryAgent(executionId: string) {
     });
   }
 
-  await prisma.execution.update({ where: { id: execution.id }, data: { status: 'WAITING_APPROVAL' } });
+  await prisma.execution.update({ where: { id: execution.id }, data: { status: 'SUCCEEDED', finishedAt: new Date() } });
   await prisma.task.update({ where: { id: task.id }, data: { status: 'WAITING_APPROVAL' } });
 
   return {
