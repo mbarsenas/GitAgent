@@ -3,6 +3,7 @@ import { createGovernedBranch } from '@/lib/github/governed-branch';
 import { createGovernedChange } from '@/lib/github/governed-change';
 import { createInstallationToken } from '@/lib/github/auth';
 import { performPullRequestReview } from '@/lib/github/review-boundary';
+import { requestHumanMergeApproval } from '@/lib/github/merge-boundary';
 import { authorizeWorkspaceWrite } from '@/lib/governance/workspace';
 import { grantMatchesTaskScope } from '@/lib/policy/task-scope';
 import { getAgentTrustState } from '@/lib/github/trust-lifecycle';
@@ -489,6 +490,10 @@ export async function runRepositoryAgent(executionId: string) {
         },
       },
     });
+  }
+
+  if (approval?.allowed) {
+    await requestHumanMergeApproval(execution.id, change.pullRequestNumber);
   }
 
   await prisma.execution.update({ where: { id: execution.id }, data: { status: 'SUCCEEDED', finishedAt: new Date() } });
