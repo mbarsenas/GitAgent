@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 
 const navItems = [
-  { label: 'Overview', href: '/' },
+  { label: 'Overview', href: '/console' },
   { label: 'Executions', href: '/executions' },
   { label: 'Approvals', href: '/approvals' },
   { label: 'New task', href: '/tasks/new' },
@@ -24,7 +24,7 @@ export function ControlPlaneShell({
   return (
     <main className="workspace">
       <header className="chrome">
-        <a className="product-mark" href="/">
+        <a className="product-mark" href="/console">
           <span className="mark-box">GA</span>
           <div>
             <strong>GitAgent</strong>
