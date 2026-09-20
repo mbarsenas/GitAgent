@@ -110,6 +110,7 @@ async function findIndependentReviewer(implementationAgentId: string, repository
     where: {
       status: 'ACTIVE',
       id: { not: implementationAgentId },
+      repositoryId,
       grants: {
         some: {
           capability: 'review.approve',
@@ -122,6 +123,44 @@ async function findIndependentReviewer(implementationAgentId: string, repository
     orderBy: { createdAt: 'asc' },
   });
   return reviewers[0] ?? null;
+}
+
+async function markReadyForHumanApproval(input: {
+  taskId: string;
+  executionId: string;
+  repository: string;
+  pullRequestNumber: number;
+  reviewerAgentId?: string | null;
+  reviewSubmitted?: boolean;
+}) {
+  await prisma.$transaction([
+    prisma.execution.update({
+      where: { id: input.executionId },
+      data: { status: 'SUCCEEDED', finishedAt: new Date() },
+    }),
+    prisma.task.update({
+      where: { id: input.taskId },
+      data: { status: 'WAITING_APPROVAL' },
+    }),
+    prisma.auditEvent.create({
+      data: {
+        taskId: input.taskId,
+        executionId: input.executionId,
+        eventType: 'agent.execution.completed',
+        actorType: 'system',
+        actorId: 'gitagent',
+        payload: {
+          repository: input.repository,
+          pullRequestNumber: input.pullRequestNumber,
+          reviewerAgentId: input.reviewerAgentId ?? null,
+          reviewSubmitted: input.reviewSubmitted ?? false,
+          outcome: 'WAITING_APPROVAL',
+          reasonCode: 'execution.ready_for_human_merge_decision',
+          policyVersion: POLICY_VERSION,
+        },
+      },
+    }),
+  ]);
 }
 
 export async function runRepositoryAgent(executionId: string) {
@@ -421,18 +460,26 @@ export async function runRepositoryAgent(executionId: string) {
 
   const change = await createGovernedChange(executionId, branch.branch);
   const reviewer = await findIndependentReviewer(agent.id, repo.id, fullName);
-  if (!reviewer) {
-    await prisma.task.update({ where: { id: task.id }, data: { status: 'WAITING_APPROVAL' } });
-    return { executionId, repository: fullName, pullRequestNumber: change.pullRequestNumber, status: 'WAITING_APPROVAL' as const };
+
+  let reviewSubmitted = false;
+  if (reviewer) {
+    const review = await performPullRequestReview(executionId, change.pullRequestNumber, reviewer.id, 'REVIEW');
+    if (review.allowed) {
+      const approval = await performPullRequestReview(executionId, change.pullRequestNumber, reviewer.id, 'APPROVE');
+      reviewSubmitted = approval.allowed;
+    }
   }
 
-  const review = await performPullRequestReview(executionId, change.pullRequestNumber, reviewer.id, 'REVIEW');
-  if (review.allowed) {
-    await performPullRequestReview(executionId, change.pullRequestNumber, reviewer.id, 'APPROVE');
-  }
   await requestHumanMergeApproval(executionId, change.pullRequestNumber);
-  await prisma.execution.update({ where: { id: execution.id }, data: { status: 'SUCCEEDED', finishedAt: new Date() } });
-  await prisma.task.update({ where: { id: task.id }, data: { status: 'WAITING_APPROVAL' } });
+  await markReadyForHumanApproval({
+    taskId: task.id,
+    executionId,
+    repository: fullName,
+    pullRequestNumber: change.pullRequestNumber,
+    reviewerAgentId: reviewer?.id ?? null,
+    reviewSubmitted,
+  });
+
   return {
     executionId,
     repository: fullName,
