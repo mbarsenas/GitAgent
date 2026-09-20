@@ -40,14 +40,15 @@ export async function POST(request: Request) {
 
     // Immutable server-side policy boundaries. Client or model output cannot override these.
     const hardBoundaries = { secretsRead: false, selfReview: false, selfApprove: false, selfMerge: false };
-    const requested = body.draft.capabilities ?? {};
+    const draft = body.draft;
+    const requested = draft.capabilities ?? {};
     const grants = Object.entries(capabilityMap)
       .filter(([key]) => requested[key] === true)
       .map(([, capability]) => capability);
     const approvals = {
-      sensitiveTransitions: body.draft.approvals?.sensitiveTransitions !== false,
-      workflowChanges: body.draft.approvals?.workflowChanges !== false,
-      dependencyChanges: body.draft.approvals?.dependencyChanges !== false,
+      sensitiveTransitions: draft.approvals?.sensitiveTransitions !== false,
+      workflowChanges: draft.approvals?.workflowChanges !== false,
+      dependencyChanges: draft.approvals?.dependencyChanges !== false,
     };
     const policyVersion = `ai-${new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14)}`;
 
@@ -85,8 +86,8 @@ export async function POST(request: Request) {
             capabilities: grants,
             approvals,
             hardBoundaries,
-            instructions: body.draft.instructions ?? '',
-            summary: body.draft.summary ?? '',
+            instructions: draft.instructions ?? '',
+            summary: draft.summary ?? '',
           },
         },
       });
