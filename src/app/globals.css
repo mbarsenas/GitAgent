@@ -393,3 +393,9 @@ textarea { resize: vertical; }
 .provider-logo { width:28px;height:28px;display:block; }
 .github-logo { color:#0b1510; }
 .google-logo { width:27px;height:27px; }
+
+/* GitAgent mascot brand mark */
+.marketing-brand .gitagent-mascot { width:42px;height:42px;display:grid;place-items:center;color:#72edb1;border:0;background:transparent;padding:0;overflow:visible; }
+.marketing-brand .gitagent-mascot svg { width:42px;height:42px;display:block;filter:drop-shadow(0 0 9px rgba(114,237,177,.22)); }
+.marketing-brand:hover .gitagent-mascot svg { filter:drop-shadow(0 0 14px rgba(114,237,177,.38));transform:translateY(-1px); }
+.marketing-brand .gitagent-mascot svg { transition:transform .2s ease,filter .2s ease; }
