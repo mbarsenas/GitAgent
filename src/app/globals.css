@@ -367,3 +367,17 @@ textarea { resize: vertical; }
   .marketing-visual .chip-one,
   .marketing-visual .chip-two { animation: none !important; }
 }
+
+
+/* Customer authentication */
+.auth-page { min-height:100vh; background:radial-gradient(circle at 50% 22%,rgba(80,220,151,.11),transparent 32%),#061710; color:#eef9f2; display:flex; flex-direction:column; align-items:center; font-family:ui-sans-serif,system-ui,sans-serif; padding:44px 20px; }
+.auth-brand { display:flex;align-items:center;gap:12px;margin-bottom:70px;font-size:17px; }
+.auth-brand span { width:38px;height:38px;display:grid;place-items:center;border:1px solid #b9ff49;border-radius:8px;color:#b9ff49;font-family:ui-monospace,monospace; }
+.auth-card { width:min(100%,520px); border:1px solid #315b49; background:linear-gradient(145deg,rgba(15,48,35,.98),rgba(7,27,19,.98)); padding:42px; box-shadow:0 30px 70px rgba(0,0,0,.34); }
+.auth-card h1 { font-size:40px;margin:14px 0 16px;letter-spacing:-.045em; }
+.auth-card>p:not(.marketing-kicker):not(.auth-switch) { color:#a5c0b3;line-height:1.65;font-size:14px; }
+.auth-github { margin:30px 0 18px;min-height:54px;padding:0 18px;background:#72edb1;color:#061710;display:flex;align-items:center;justify-content:space-between;font-weight:900;transition:.2s ease; }
+.auth-github:hover { transform:translateY(-3px);box-shadow:0 14px 30px rgba(114,237,177,.16); }
+.auth-card small { display:block;color:#7f9e90;line-height:1.55;font-size:10px; }
+.auth-switch { margin:28px 0 0!important;padding-top:22px;border-top:1px solid #284c3c;color:#8ca99c!important;font-size:11px!important; }
+.auth-switch a { color:#72edb1; }
