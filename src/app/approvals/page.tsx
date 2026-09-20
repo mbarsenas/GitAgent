@@ -60,9 +60,6 @@ export default function ApprovalsPage() {
   const historical = useMemo(() => data?.approvals.filter((a) => !a.actionable) ?? [], [data]);
 
   async function decide(approval: Approval, decision: 'APPROVE' | 'REJECT') {
-    const humanActorId = window.prompt('Human actor user ID');
-    if (!humanActorId) return;
-
     setBusyId(approval.approvalId);
     setError(null);
     setNotice(null);
@@ -72,7 +69,6 @@ export default function ApprovalsPage() {
       const payload = isMerge
         ? {
             approvalId: approval.approvalId,
-            humanActorId,
             decision,
             action: 'DECIDE',
             reason: `Decision from GitAgent approvals UI: ${decision}`,
@@ -80,7 +76,6 @@ export default function ApprovalsPage() {
         : {
             approvalId: approval.approvalId,
             executionId: approval.executionId,
-            humanActorId,
             decision,
             reason: `Decision from GitAgent approvals UI: ${decision}`,
           };
@@ -175,7 +170,7 @@ export default function ApprovalsPage() {
               <div className="approval-actions">
                 <button className="ghost-button" disabled={busyId === approval.approvalId} onClick={() => decide(approval, 'REJECT')}>Reject</button>
                 <button className="solid-button" disabled={busyId === approval.approvalId} onClick={() => decide(approval, 'APPROVE')}>Approve</button>
-                {approval.action.startsWith('pr.merge:') && (
+                {approval.action.startsWith('pr.merge:') && approval.status === 'APPROVED' && (
                   <button className="ghost-button" disabled={busyId === approval.approvalId} onClick={() => executeMerge(approval)}>Execute merge</button>
                 )}
               </div>
