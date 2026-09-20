@@ -30,6 +30,7 @@ button { cursor: pointer; }
 .repo-context strong { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .muted { color: var(--muted); }
 .branch { padding: 4px 7px; border: 1px solid var(--border); background: #123629; color: #d8eee2; font-size: 10px; }
+.status-positive { border-color: #39ff14; background: rgba(57, 255, 20, .14); color: #39ff14; box-shadow: 0 0 12px rgba(57, 255, 20, .22); }
 .chrome-actions { padding-right: 12px; display: flex; gap: 8px; flex-wrap: wrap; }
 .ghost-button, .solid-button { min-height: 34px; padding: 0 12px; border: 1px solid var(--border); background: transparent; color: var(--text); cursor: pointer; font-size: 11px; display: inline-flex; align-items: center; justify-content: center; transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease, background .18s ease; }
 .solid-button { background: var(--accent); color: #062016; border-color: var(--accent); font-weight: 900; }
