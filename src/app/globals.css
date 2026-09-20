@@ -318,3 +318,52 @@ textarea { resize: vertical; }
 .marketing-footer strong { color:#eef9f2;font-size:14px; }.marketing-footer a{color:#72edb1}
 @media(max-width:900px){.marketing-hero{grid-template-columns:1fr;padding-top:60px}.marketing-visual{min-height:430px}.marketing-features{grid-template-columns:1fr 1fr}.marketing-features article:nth-child(3n){border-right:1px solid #254b3b}.marketing-features article:nth-child(2n){border-right:0}.marketing-features article:nth-last-child(-n+3){border-bottom:1px solid #254b3b}.marketing-features article:nth-last-child(-n+2){border-bottom:0}}
 @media(max-width:620px){.marketing-nav{width:calc(100% - 28px)}.marketing-nav nav>a:not(.marketing-console){display:none}.marketing-console{padding:12px 16px}.marketing-hero{width:calc(100% - 32px);gap:20px}.marketing-copy h1{font-size:52px}.marketing-actions{flex-direction:column}.marketing-primary,.marketing-secondary{justify-content:space-between}.marketing-visual{min-height:360px}.floating-chip{display:none}.visual-flow{display:none}.marketing-features{width:calc(100% - 32px);grid-template-columns:1fr}.marketing-features article,.marketing-features article:nth-child(2n),.marketing-features article:nth-child(3n),.marketing-features article:nth-last-child(-n+2){border-right:0;border-bottom:1px solid #254b3b}.marketing-features article:last-child{border-bottom:0}.marketing-footer{width:calc(100% - 32px);flex-direction:column;align-items:flex-start;justify-content:center}}
+
+
+/* Marketing hero motion */
+@keyframes gitagent-window-float {
+  0%, 100% { transform: translate3d(0, 0, 0) rotateY(-5deg) rotateX(2deg) rotateZ(-1deg); }
+  50% { transform: translate3d(0, -14px, 18px) rotateY(-2deg) rotateX(1deg) rotateZ(.25deg); }
+}
+@keyframes gitagent-chip-one-float {
+  0%, 100% { transform: translate3d(0, 0, 24px); }
+  50% { transform: translate3d(-7px, -12px, 34px); }
+}
+@keyframes gitagent-chip-two-float {
+  0%, 100% { transform: translate3d(0, 0, 30px); }
+  50% { transform: translate3d(8px, 10px, 42px); }
+}
+@keyframes gitagent-glow-breathe {
+  0%, 100% { opacity: .65; transform: scale(.96); }
+  50% { opacity: 1; transform: scale(1.08); }
+}
+.marketing-visual .visual-window {
+  animation: gitagent-window-float 7s ease-in-out infinite;
+  transform-style: preserve-3d;
+  will-change: transform;
+  transition: filter .28s ease, box-shadow .28s ease;
+}
+.marketing-visual .visual-glow {
+  animation: gitagent-glow-breathe 6s ease-in-out infinite;
+  will-change: transform, opacity;
+}
+.marketing-visual .chip-one {
+  animation: gitagent-chip-one-float 5.2s ease-in-out infinite;
+  will-change: transform;
+}
+.marketing-visual .chip-two {
+  animation: gitagent-chip-two-float 6.4s ease-in-out infinite .35s;
+  will-change: transform;
+}
+.marketing-visual:hover .visual-window {
+  animation-play-state: paused;
+  transform: translate3d(0, -8px, 60px) rotateY(-1deg) rotateX(.5deg) rotateZ(0deg);
+  filter: brightness(1.06);
+  box-shadow: 0 52px 90px rgba(0,0,0,.46), 0 0 42px rgba(114,237,177,.13), inset 0 0 45px rgba(114,237,177,.06);
+}
+@media (prefers-reduced-motion: reduce) {
+  .marketing-visual .visual-window,
+  .marketing-visual .visual-glow,
+  .marketing-visual .chip-one,
+  .marketing-visual .chip-two { animation: none !important; }
+}
