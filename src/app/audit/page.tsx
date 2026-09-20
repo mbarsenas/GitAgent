@@ -1,6 +1,8 @@
 import { ControlPlaneShell } from '@/app/components/control-plane-shell';
 import { listAuditTimeline } from '@/lib/governance/audit-query';
 
+export const dynamic = 'force-dynamic';
+
 function readPayload(payload: unknown) {
   if (!payload || typeof payload !== 'object') return {} as Record<string, unknown>;
   return payload as Record<string, unknown>;

@@ -41,7 +41,7 @@ export async function POST() {
     });
 
     if (execution.workspace?.status === 'ACTIVE') {
-      await sealExecutionWorkspace(execution.id, 'stale_execution_cleanup');
+      await sealExecutionWorkspace(execution.id);
     }
     cleaned.push(execution.id);
   }

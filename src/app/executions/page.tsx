@@ -1,6 +1,8 @@
 import { prisma } from '@/lib/db/prisma';
 import { ControlPlaneShell } from '@/app/components/control-plane-shell';
 
+export const dynamic = 'force-dynamic';
+
 export default async function ExecutionsPage() {
   const executions = await prisma.execution.findMany({
     orderBy: { createdAt: 'desc' },

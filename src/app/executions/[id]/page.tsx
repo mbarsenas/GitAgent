@@ -2,6 +2,8 @@ import { notFound } from 'next/navigation';
 import { prisma } from '@/lib/db/prisma';
 import { ControlPlaneShell } from '@/app/components/control-plane-shell';
 
+export const dynamic = 'force-dynamic';
+
 type PageProps = { params: Promise<{ id: string }> };
 
 function payloadRecord(payload: unknown) {

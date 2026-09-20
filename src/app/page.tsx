@@ -1,6 +1,8 @@
 import { prisma } from '@/lib/db/prisma';
 import { getAgentTrustState } from '@/lib/github/trust-lifecycle';
 
+export const dynamic = 'force-dynamic';
+
 const nav = [
   { label: 'Overview', href: '/' },
   { label: 'Executions', href: '/executions' },
