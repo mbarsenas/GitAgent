@@ -18,7 +18,8 @@ export default function MarketingHome() {
         <nav>
           <a href="#workflow">Workflow</a>
           <a href="#governance">Governance</a>
-          <a className="marketing-console" href="/console">Open console</a>
+          <a href="/signin">Sign in</a>
+          <a className="marketing-console" href="/signup">Create account</a>
         </nav>
       </header>
 
@@ -28,7 +29,7 @@ export default function MarketingHome() {
           <h1>The GitHub agent<br />with a <em>human<br />at merge.</em></h1>
           <p className="marketing-lede">GitAgent turns approved work into isolated, reviewable pull requests—so AI can move the code forward without becoming the owner of your repository.</p>
           <div className="marketing-actions">
-            <a className="marketing-primary" href="/console">Open GitAgent <span>→</span></a>
+            <a className="marketing-primary" href="/signup">Start with GitHub <span>→</span></a>
             <a className="marketing-secondary" href="#workflow">See the workflow</a>
           </div>
           <div className="marketing-proof">
@@ -67,10 +68,10 @@ export default function MarketingHome() {
       <section className="marketing-final">
         <p>GOVERNANCE WITHOUT THE BOTTLENECK</p>
         <h2>Give agents enough authority to work.<br /><em>Keep the authority that matters.</em></h2>
-        <a className="marketing-primary" href="/console">Open the control plane <span>→</span></a>
+        <a className="marketing-primary" href="/signup">Create your account <span>→</span></a>
       </section>
 
-      <footer className="marketing-footer"><strong>GitAgent</strong><span>GitAgentFlow.com · Governed AI development</span><a href="/console">Console →</a></footer>
+      <footer className="marketing-footer"><strong>GitAgent</strong><span>GitAgentFlow.com · Governed AI development</span><a href="/signin">Sign in →</a></footer>
     </main>
   );
 }
