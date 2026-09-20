@@ -11,8 +11,9 @@ export type AuditTimelineItem = {
   payload: unknown;
 };
 
-export async function listAuditTimeline(limit = 50): Promise<AuditTimelineItem[]> {
+export async function listAuditTimeline(userId: string, limit = 50): Promise<AuditTimelineItem[]> {
   return prisma.auditEvent.findMany({
+    where: { task: { repository: { userId } } },
     orderBy: { createdAt: 'desc' },
     take: limit,
     select: {

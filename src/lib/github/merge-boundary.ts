@@ -82,6 +82,12 @@ async function auditMergeDenial(input: {
   });
 }
 
+function assertRepositoryOwner(ownerUserId: string | null, actorUserId: string) {
+  if (!ownerUserId || ownerUserId !== actorUserId) {
+    throw new MergePolicyError('User does not own this repository.', 'merge.repository_owner_mismatch', 403);
+  }
+}
+
 export async function requestHumanMergeApproval(executionId: string, pullRequestNumber: number) {
   const execution = await prisma.execution.findUnique({
     where: { id: executionId },
@@ -211,11 +217,15 @@ export async function recordHumanMergeDecision(
   decision: 'APPROVE' | 'REJECT',
   reason?: string,
 ) {
-  const approval = await prisma.approval.findUnique({ where: { id: approvalId } });
+  const approval = await prisma.approval.findUnique({
+    where: { id: approvalId },
+    include: { task: { include: { repository: { select: { userId: true } } } } },
+  });
   if (!approval) throw new MergePolicyError('Approval not found.', 'merge.approval_not_found', 404);
   if (!approval.executionId || approval.resourceType !== 'github.pull_request' || !approval.resourceId) {
     throw new MergePolicyError('Approval is not a GitHub pull request merge approval.', 'merge.approval_resource_mismatch', 409);
   }
+  assertRepositoryOwner(approval.task.repository.userId, humanActorId);
 
   if (decision === 'APPROVE') {
     const updated = await approveHumanMerge({
@@ -248,7 +258,7 @@ export async function recordHumanMergeDecision(
   return { approval: updated, decision };
 }
 
-export async function executeApprovedMerge(approvalId: string, executionId?: string, pullRequestNumber?: number) {
+export async function executeApprovedMerge(approvalId: string, executionId?: string, pullRequestNumber?: number, actorUserId?: string) {
   const approval = await prisma.approval.findUnique({
     where: { id: approvalId },
     include: {
@@ -260,6 +270,7 @@ export async function executeApprovedMerge(approvalId: string, executionId?: str
     },
   });
   if (!approval) throw new MergePolicyError('Approval not found.', 'merge.approval_not_found', 404);
+  if (actorUserId) assertRepositoryOwner(approval.task.repository.userId, actorUserId);
 
   const resolvedExecutionId = executionId ?? approval.executionId ?? undefined;
   const resolvedPullRequestNumber = pullRequestNumber ?? Number(approval.resourceId);

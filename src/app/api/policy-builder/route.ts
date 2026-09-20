@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { requireCurrentUser } from '@/lib/auth/current-user';
 
 export const dynamic = 'force-dynamic';
 
@@ -35,6 +36,7 @@ function extractJson(text: string) {
 
 export async function POST(request: Request) {
   try {
+    await requireCurrentUser();
     const { description } = (await request.json()) as { description?: string };
     if (!description?.trim()) return NextResponse.json({ ok: false, error: 'Describe how you want the agent constrained.' }, { status: 400 });
 

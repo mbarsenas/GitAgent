@@ -1,5 +1,7 @@
 import { prisma } from '@/lib/db/prisma';
 import { getAgentTrustState } from '@/lib/github/trust-lifecycle';
+import { requireCurrentUser } from '@/lib/auth/current-user';
+import { redirect } from 'next/navigation';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,47 +20,50 @@ function payloadRecord(payload: unknown) {
 }
 
 export default async function Home() {
+  let session;
+  try {
+    session = await requireCurrentUser();
+  } catch {
+    redirect('/signin');
+  }
   const repository = await prisma.repository.findFirst({
-    where: { provider: 'github', externalId: '1373462743' },
+    where: { provider: 'github', userId: session.userId },
   });
 
   const [agents, tasks, executions, pendingApprovals, auditEvents, securityRun, readinessRun] = await Promise.all([
     prisma.agent.findMany({
       where: {
         status: 'ACTIVE',
-        OR: [
-          ...(repository ? [{ repositoryId: repository.id }] : []),
-          { repositoryId: null, grants: { some: { capability: 'review.approve', effect: 'ALLOW' } } },
-        ],
+        repositoryId: repository?.id ?? '__no_repository_for_user__',
       },
       orderBy: { createdAt: 'asc' },
       take: 8,
     }),
     prisma.task.findMany({
-      where: repository ? { repositoryId: repository.id } : undefined,
+      where: { repositoryId: repository?.id ?? '__no_repository_for_user__' },
       orderBy: { createdAt: 'desc' },
       take: 8,
       include: { agent: true },
     }),
     prisma.execution.findMany({
-      where: repository ? { task: { repositoryId: repository.id } } : undefined,
+      where: { task: { repositoryId: repository?.id ?? '__no_repository_for_user__' } },
       orderBy: { createdAt: 'desc' },
       take: 8,
       include: { task: true, agent: true, workspace: true },
     }),
     prisma.approval.findMany({
-      where: { status: 'PENDING', ...(repository ? { task: { repositoryId: repository.id } } : {}) },
+      where: { status: 'PENDING', task: { repositoryId: repository?.id ?? '__no_repository_for_user__' } },
       orderBy: { requestedAt: 'asc' },
       take: 8,
       include: { task: true },
     }),
     prisma.auditEvent.findMany({
-      where: repository ? { task: { repositoryId: repository.id } } : undefined,
+      where: { task: { repositoryId: repository?.id ?? '__no_repository_for_user__' } },
       orderBy: { createdAt: 'desc' },
       take: 6,
     }),
-    prisma.auditEvent.findFirst({ where: { eventType: 'security.suite.completed' }, orderBy: { createdAt: 'desc' } }),
-    prisma.auditEvent.findFirst({ where: { eventType: 'readiness.checked' }, orderBy: { createdAt: 'desc' } }),
+    prisma.auditEvent.findFirst({ where: { eventType: 'security.suite.completed', task: { repositoryId: repository?.id ?? '__no_repository_for_user__' } }, orderBy: { createdAt: 'desc' } }),
+    prisma.auditEvent.findFirst({ where: { eventType: 'readiness.checked', task: { repositoryId: repository?.id ?? '__no_repository_for_user__' } }, orderBy: { createdAt: 'desc' } }),
   ]);
 
   const trust = await Promise.all(

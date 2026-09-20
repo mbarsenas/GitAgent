@@ -1,5 +1,7 @@
+import { redirect } from 'next/navigation';
 import { ControlPlaneShell } from '@/app/components/control-plane-shell';
 import { listAuditTimeline } from '@/lib/governance/audit-query';
+import { requireCurrentUser } from '@/lib/auth/current-user';
 
 export const dynamic = 'force-dynamic';
 
@@ -9,7 +11,13 @@ function readPayload(payload: unknown) {
 }
 
 export default async function AuditPage() {
-  const events = await listAuditTimeline(100);
+  let session;
+  try {
+    session = await requireCurrentUser();
+  } catch {
+    redirect('/signin');
+  }
+  const events = await listAuditTimeline(session.userId, 100);
 
   return (
     <ControlPlaneShell active="/audit" title="Audit timeline" subtitle={`${events.length} events`}>

@@ -168,8 +168,10 @@ export default function ApprovalsPage() {
                 <span>{new Date(approval.requestedAt).toLocaleString()}</span>
               </div>
               <div className="approval-actions">
-                <button className="ghost-button" disabled={busyId === approval.approvalId} onClick={() => decide(approval, 'REJECT')}>Reject</button>
-                <button className="solid-button" disabled={busyId === approval.approvalId} onClick={() => decide(approval, 'APPROVE')}>Approve</button>
+                {approval.status === 'PENDING' && <>
+                  <button className="ghost-button" disabled={busyId === approval.approvalId} onClick={() => decide(approval, 'REJECT')}>Reject</button>
+                  <button className="solid-button" disabled={busyId === approval.approvalId} onClick={() => decide(approval, 'APPROVE')}>Approve</button>
+                </>}
                 {approval.action.startsWith('pr.merge:') && approval.status === 'APPROVED' && (
                   <button className="ghost-button" disabled={busyId === approval.approvalId} onClick={() => executeMerge(approval)}>Execute merge</button>
                 )}

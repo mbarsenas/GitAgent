@@ -35,7 +35,7 @@ export async function POST(request: Request) {
     }
 
     if (action === 'EXECUTE') {
-      const result = await executeApprovedMerge(approvalId);
+      const result = await executeApprovedMerge(approvalId, undefined, undefined, session.userId);
       return NextResponse.json({
         ok: true,
         phase: 'execution',

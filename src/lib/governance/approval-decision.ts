@@ -14,7 +14,7 @@ export async function decideRestrictedExecution(input: {
   if (!human) throw new Error('Human actor not found.');
 
   const approval = input.approvalId
-    ? await prisma.approval.findUnique({ where: { id: input.approvalId }, include: { task: true } })
+    ? await prisma.approval.findUnique({ where: { id: input.approvalId }, include: { task: { include: { repository: true } } } })
     : await prisma.approval.findFirst({
         where: {
           taskId: input.taskId,
@@ -22,11 +22,14 @@ export async function decideRestrictedExecution(input: {
           action: 'restricted.execute',
           status: 'PENDING',
         },
-        include: { task: true },
+        include: { task: { include: { repository: true } } },
         orderBy: { requestedAt: 'desc' },
       });
 
   if (!approval) throw new Error('Restricted execution approval not found.');
+  if (!approval.task.repository.userId || approval.task.repository.userId !== human.id) {
+    throw new Error('Human actor does not own this repository.');
+  }
   if (approval.action !== 'restricted.execute') throw new Error('Approval is not for restricted execution.');
   if (input.taskId && approval.taskId !== input.taskId) throw new Error('approvalId does not belong to taskId.');
   if (input.executionId && approval.executionId !== input.executionId) {

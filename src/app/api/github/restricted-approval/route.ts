@@ -1,12 +1,14 @@
 import { NextResponse } from 'next/server';
+import { requireCurrentUser } from '@/lib/auth/current-user';
 import { decideRestrictedExecution } from '@/lib/governance/approval-decision';
 
 export async function POST(request: Request) {
   try {
+    const session = await requireCurrentUser();
     const body = await request.json();
-    if ((!body.approvalId && !body.taskId) || !body.humanActorId || !body.decision) {
+    if ((!body.approvalId && !body.taskId) || !body.decision) {
       return NextResponse.json(
-        { ok: false, error: 'approvalId (or taskId), humanActorId, and decision are required.' },
+        { ok: false, error: 'approvalId (or taskId) and decision are required.' },
         { status: 400 },
       );
     }
@@ -18,7 +20,7 @@ export async function POST(request: Request) {
       approvalId: body.approvalId,
       taskId: body.taskId,
       executionId: body.executionId,
-      humanActorId: body.humanActorId,
+      humanActorId: session.userId,
       decision: body.decision,
       reason: body.reason,
     });

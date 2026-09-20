@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
+import { requireCurrentUser } from '@/lib/auth/current-user';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,10 +14,10 @@ const capabilityMap: Record<string, string> = {
 
 export async function POST(request: Request) {
   try {
+    const session = await requireCurrentUser();
     const body = await request.json() as {
       repositoryId?: string;
       agentId?: string;
-      actorId?: string;
       draft?: {
         capabilities?: Record<string, boolean>;
         approvals?: Record<string, boolean>;
@@ -26,14 +27,14 @@ export async function POST(request: Request) {
       };
     };
 
-    if (!body.repositoryId || !body.agentId || !body.actorId || !body.draft) {
+    if (!body.repositoryId || !body.agentId || !body.draft) {
       return NextResponse.json({ ok: false, error: 'Repository, agent, human approver, and policy draft are required.' }, { status: 400 });
     }
 
     const [repository, agent, actor] = await Promise.all([
-      prisma.repository.findUnique({ where: { id: body.repositoryId } }),
+      prisma.repository.findFirst({ where: { id: body.repositoryId, userId: session.userId } }),
       prisma.agent.findUnique({ where: { id: body.agentId } }),
-      prisma.user.findUnique({ where: { id: body.actorId } }),
+      prisma.user.findUnique({ where: { id: session.userId } }),
     ]);
     if (!repository || !agent || !actor) return NextResponse.json({ ok: false, error: 'Selected repository, agent, or approver was not found.' }, { status: 400 });
     if (agent.repositoryId && agent.repositoryId !== repository.id) return NextResponse.json({ ok: false, error: 'The selected agent is assigned to a different repository.' }, { status: 400 });
@@ -75,7 +76,7 @@ export async function POST(request: Request) {
         data: {
           eventType: 'policy.applied',
           actorType: 'HUMAN',
-          actorId: actor.id,
+          actorId: session.userId,
           payload: {
             severity: 'INFO',
             reasonCode: 'human_reviewed_ai_policy',

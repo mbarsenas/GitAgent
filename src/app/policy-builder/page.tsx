@@ -64,7 +64,7 @@ export default function PolicyBuilderPage() {
       const response = await fetch('/api/policy-builder/apply', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ repositoryId: form.get('repositoryId'), agentId: form.get('agentId'), actorId: form.get('actorId'), draft }),
+        body: JSON.stringify({ repositoryId: form.get('repositoryId'), agentId: form.get('agentId'), draft }),
       });
       const body = await response.json();
       if (!response.ok || !body.ok) throw new Error(body.error || 'Policy apply failed');
@@ -116,7 +116,7 @@ export default function PolicyBuilderPage() {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12 }}>
               <label><span className="label">Repository</span><select name="repositoryId" required style={{ width: '100%', marginTop: 6 }}>{bootstrap.repositories.map((r) => <option key={r.id} value={r.id}>{r.owner ? `${r.owner} / ` : ''}{r.name}</option>)}</select></label>
               <label><span className="label">Agent</span><select name="agentId" required style={{ width: '100%', marginTop: 6 }}>{bootstrap.agents.map((a) => <option key={a.id} value={a.id}>{a.name ?? a.slug}</option>)}</select></label>
-              <label><span className="label">Human approver</span><select name="actorId" required style={{ width: '100%', marginTop: 6 }}>{bootstrap.users.map((u) => <option key={u.id} value={u.id}>{u.name ?? u.email}</option>)}</select></label>
+              <label><span className="label">Policy author</span><strong>{bootstrap.users[0]?.name ?? bootstrap.users[0]?.email ?? 'Authenticated user'}</strong></label>
             </div>
             <div className="notice" style={{ margin: 0 }}>Applying replaces this agent's current capability grants for the selected repository. GitAgent re-enforces immutable boundaries server-side and records a <strong>policy.applied</strong> audit event.</div>
             <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}><input type="checkbox" required /><span>I reviewed the effective permissions, approval gates, hard boundaries, and generated instructions.</span></label>

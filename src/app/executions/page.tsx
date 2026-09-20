@@ -1,10 +1,19 @@
+import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/db/prisma';
 import { ControlPlaneShell } from '@/app/components/control-plane-shell';
+import { requireCurrentUser } from '@/lib/auth/current-user';
 
 export const dynamic = 'force-dynamic';
 
 export default async function ExecutionsPage() {
+  let session;
+  try {
+    session = await requireCurrentUser();
+  } catch {
+    redirect('/signin');
+  }
   const executions = await prisma.execution.findMany({
+    where: { task: { repository: { userId: session.userId } } },
     orderBy: { createdAt: 'desc' },
     take: 40,
     include: {

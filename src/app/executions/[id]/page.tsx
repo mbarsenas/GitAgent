@@ -1,6 +1,7 @@
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { prisma } from '@/lib/db/prisma';
 import { ControlPlaneShell } from '@/app/components/control-plane-shell';
+import { requireCurrentUser } from '@/lib/auth/current-user';
 
 export const dynamic = 'force-dynamic';
 
@@ -11,6 +12,12 @@ function payloadRecord(payload: unknown) {
 }
 
 export default async function ExecutionDetailPage({ params }: PageProps) {
+  let session;
+  try {
+    session = await requireCurrentUser();
+  } catch {
+    redirect('/signin');
+  }
   const { id } = await params;
   const execution = await prisma.execution.findUnique({
     where: { id },
@@ -20,7 +27,7 @@ export default async function ExecutionDetailPage({ params }: PageProps) {
       task: { include: { repository: true, initiator: true, approvals: { orderBy: { requestedAt: 'asc' } } } },
     },
   });
-  if (!execution) notFound();
+  if (!execution || execution.task.repository.userId !== session.userId) notFound();
 
   const events = await prisma.auditEvent.findMany({
     where: { executionId: id },
