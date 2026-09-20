@@ -1,4 +1,51 @@
 import { NextResponse } from 'next/server';
-import { syncGitHubInstallationRepositories } from '@/lib/github/sync';
+import { requireCurrentUser } from '@/lib/auth/current-user';
 import { prisma } from '@/lib/db/prisma';
-export async function POST(){try{const result=await syncGitHubInstallationRepositories();const repos=await prisma.repository.findMany({where:{provider:'github',owner:'mbarsenas',name:'GitAgent'},orderBy:{createdAt:'asc'}});const canonical=repos.find(r=>r.externalId==='1373462743');return NextResponse.json({ok:true,reconciled:true,canonicalRepository:canonical?{id:canonical.id,externalId:canonical.externalId,fullName:`${canonical.owner}/${canonical.name}`} : null,remainingDuplicates:canonical?repos.filter(r=>r.id!==canonical.id).length:repos.length,syncedRepositories:result.repositories.map(r=>({id:r.id,externalId:r.externalId,fullName:`${r.owner}/${r.name}`}))});}catch(error){return NextResponse.json({ok:false,error:error instanceof Error?error.message:String(error)},{status:500});}}
+import { syncGitHubInstallationRepositories } from '@/lib/github/sync';
+
+export const dynamic = 'force-dynamic';
+
+export async function POST() {
+  try {
+    const session = await requireCurrentUser();
+    const user = await prisma.user.findUnique({
+      where: { id: session.userId },
+      select: { id: true, githubInstallationId: true },
+    });
+
+    if (!user) {
+      return NextResponse.json({ ok: false, error: 'User not found' }, { status: 401 });
+    }
+
+    if (!user.githubInstallationId) {
+      return NextResponse.json({ ok: false, error: 'GitHub App installation is not connected for this account' }, { status: 409 });
+    }
+
+    const result = await syncGitHubInstallationRepositories(user.githubInstallationId, user.id);
+    const repos = await prisma.repository.findMany({
+      where: { provider: 'github', userId: user.id },
+      orderBy: [{ owner: 'asc' }, { name: 'asc' }, { createdAt: 'asc' }],
+    });
+
+    return NextResponse.json({
+      ok: true,
+      reconciled: true,
+      repositoryCount: repos.length,
+      repositories: repos.map((repo) => ({
+        id: repo.id,
+        externalId: repo.externalId,
+        fullName: `${repo.owner}/${repo.name}`,
+        defaultBranch: repo.defaultBranch,
+      })),
+      syncedRepositories: result.repositories.map((repo) => ({
+        id: repo.id,
+        externalId: repo.externalId,
+        fullName: `${repo.owner}/${repo.name}`,
+      })),
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const status = message === 'UNAUTHENTICATED' ? 401 : 500;
+    return NextResponse.json({ ok: false, error: message }, { status });
+  }
+}
