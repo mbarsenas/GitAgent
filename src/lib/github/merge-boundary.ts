@@ -56,7 +56,7 @@ async function auditMergeDenial(input: {
   executionId: string;
   approvalId: string;
   pullRequestNumber: number;
-  actorType: 'system' | 'human';
+  actorType: 'system' | 'human' | 'agent';
   actorId: string;
   reasonCode: string;
   message: string;
@@ -80,6 +80,38 @@ async function auditMergeDenial(input: {
       },
     },
   });
+}
+
+export async function attemptMergeAsAgent(executionId: string, pullRequestNumber: number, actorAgentId: string) {
+  const execution = await prisma.execution.findUnique({
+    where: { id: executionId },
+    include: { task: true },
+  });
+  if (!execution) throw new MergePolicyError('Execution not found.', 'merge.execution_not_found', 404);
+
+  const reasonCode =
+    actorAgentId === execution.agentId ? 'policy.implementation_agent_merge_denied' : 'policy.agent_merge_denied';
+
+  await auditMergeDenial({
+    taskId: execution.taskId,
+    executionId,
+    approvalId: 'none',
+    pullRequestNumber,
+    actorType: 'agent',
+    actorId: actorAgentId,
+    reasonCode,
+    message: 'Agents may not merge pull requests. A human merge approval is required.',
+    githubRequestSent: false,
+  });
+
+  return {
+    allowed: false as const,
+    decision: 'DENY' as const,
+    reasonCode,
+    githubRequestSent: false,
+    actorAgentId,
+    implementationAgentId: execution.agentId,
+  };
 }
 
 export async function requestHumanMergeApproval(executionId: string, pullRequestNumber: number) {
@@ -207,7 +239,50 @@ export async function approveHumanMerge(input: {
   return updated;
 }
 
-export async function executeApprovedMerge(approvalId: string, executionId: string, pullRequestNumber: number) {
+export async function recordHumanMergeDecision(
+  approvalId: string,
+  humanActorId: string,
+  decision: 'APPROVE' | 'REJECT',
+  reason?: string,
+) {
+  const approval = await prisma.approval.findUnique({ where: { id: approvalId } });
+  if (!approval) throw new MergePolicyError('Approval not found.', 'merge.approval_not_found', 404);
+  if (!approval.executionId || approval.resourceType !== 'github.pull_request' || !approval.resourceId) {
+    throw new MergePolicyError('Approval is not a GitHub pull request merge approval.', 'merge.approval_resource_mismatch', 409);
+  }
+
+  if (decision === 'APPROVE') {
+    const updated = await approveHumanMerge({
+      approvalId,
+      userId: humanActorId,
+      executionId: approval.executionId,
+      pullRequestNumber: Number(approval.resourceId),
+    });
+    return { approval: updated, decision };
+  }
+
+  if (approval.status !== 'PENDING') {
+    throw new MergePolicyError('Approval is not pending.', 'merge.approval_not_pending', 409);
+  }
+
+  const updated = await prisma.approval.update({
+    where: { id: approvalId },
+    data: { status: 'REJECTED', actorType: 'human', actorId: humanActorId, reason, decidedAt: new Date() },
+  });
+  await prisma.auditEvent.create({
+    data: {
+      taskId: updated.taskId,
+      executionId: updated.executionId,
+      eventType: 'approval.rejected',
+      actorType: 'human',
+      actorId: humanActorId,
+      payload: { approvalId, reason: reason ?? null, policyVersion: POLICY_VERSION },
+    },
+  });
+  return { approval: updated, decision };
+}
+
+export async function executeApprovedMerge(approvalId: string, executionId?: string, pullRequestNumber?: number) {
   const approval = await prisma.approval.findUnique({
     where: { id: approvalId },
     include: {
@@ -219,34 +294,41 @@ export async function executeApprovedMerge(approvalId: string, executionId: stri
     },
   });
   if (!approval) throw new MergePolicyError('Approval not found.', 'merge.approval_not_found', 404);
-  if (approval.executionId !== executionId) {
+
+  const resolvedExecutionId = executionId ?? approval.executionId ?? undefined;
+  const resolvedPullRequestNumber = pullRequestNumber ?? Number(approval.resourceId);
+  if (!resolvedExecutionId || !Number.isFinite(resolvedPullRequestNumber)) {
+    throw new MergePolicyError('Approval is missing execution or pull request context.', 'merge.approval_resource_mismatch', 409);
+  }
+
+  if (approval.executionId !== resolvedExecutionId) {
     throw new MergePolicyError('Approval does not belong to this execution.', 'merge.approval_execution_mismatch', 409);
   }
   if (approval.status !== 'APPROVED' || approval.actorType !== 'human' || !approval.actorId) {
     throw new MergePolicyError('Human approval is required before merge.', 'merge.human_approval_required', 409);
   }
 
-  const prior = await exactMergeAudit(executionId, pullRequestNumber);
+  const prior = await exactMergeAudit(resolvedExecutionId, resolvedPullRequestNumber);
   if (prior) {
     const payload = prior.payload as Record<string, unknown>;
     return {
       merged: true as const,
       idempotentReplay: true,
       recovered: Boolean(payload.recoveredFromGitHubState),
-      pullRequestNumber,
+      pullRequestNumber: resolvedPullRequestNumber,
       mergeSha: payload.mergeSha ?? null,
       approvalId,
       approvedByUserId: payload.approvedByUserId ?? approval.actorId,
     };
   }
 
-  const independent = await exactReviewApproval(executionId, pullRequestNumber);
+  const independent = await exactReviewApproval(resolvedExecutionId, resolvedPullRequestNumber);
   if (!independent) {
     await auditMergeDenial({
       taskId: approval.taskId,
-      executionId,
+      executionId: resolvedExecutionId,
       approvalId,
-      pullRequestNumber,
+      pullRequestNumber: resolvedPullRequestNumber,
       actorType: 'system',
       actorId: 'gitagent',
       reasonCode: 'merge.independent_review_required',
@@ -269,7 +351,7 @@ export async function executeApprovedMerge(approvalId: string, executionId: stri
     );
   }
   const token = await createInstallationToken(repo.user.githubInstallationId);
-  const prResponse = await fetch(`${API}/repos/${repo.owner}/${repo.name}/pulls/${pullRequestNumber}`, {
+  const prResponse = await fetch(`${API}/repos/${repo.owner}/${repo.name}/pulls/${resolvedPullRequestNumber}`, {
     headers: {
       Accept: 'application/vnd.github+json',
       Authorization: `Bearer ${token.token}`,
@@ -293,19 +375,19 @@ export async function executeApprovedMerge(approvalId: string, executionId: stri
   };
 
   if (prState.merged) {
-    await sealExecutionWorkspace(executionId);
+    await sealExecutionWorkspace(resolvedExecutionId);
     await prisma.$transaction([
       prisma.task.update({ where: { id: approval.taskId }, data: { status: 'SUCCEEDED' } }),
       prisma.auditEvent.create({
         data: {
           taskId: approval.taskId,
-          executionId,
+          executionId: resolvedExecutionId,
           eventType: 'github.pr.merged',
           actorType: 'human',
           actorId: approval.actorId,
           payload: {
             repository: `${repo.owner}/${repo.name}`,
-            pullRequestNumber,
+            pullRequestNumber: resolvedPullRequestNumber,
             mergeSha: prState.merge_commit_sha ?? null,
             approvalId,
             approvedByUserId: approval.actorId,
@@ -319,7 +401,7 @@ export async function executeApprovedMerge(approvalId: string, executionId: stri
       merged: true as const,
       idempotentReplay: false,
       recovered: true,
-      pullRequestNumber,
+      pullRequestNumber: resolvedPullRequestNumber,
       mergeSha: prState.merge_commit_sha ?? null,
       approvalId,
       approvedByUserId: approval.actorId,
@@ -330,7 +412,7 @@ export async function executeApprovedMerge(approvalId: string, executionId: stri
     throw new MergePolicyError('Pull request is not mergeable.', 'merge.pr_not_mergeable', 409);
   }
 
-  const mergeResponse = await fetch(`${API}/repos/${repo.owner}/${repo.name}/pulls/${pullRequestNumber}/merge`, {
+  const mergeResponse = await fetch(`${API}/repos/${repo.owner}/${repo.name}/pulls/${resolvedPullRequestNumber}/merge`, {
     method: 'PUT',
     headers: {
       Accept: 'application/vnd.github+json',
@@ -350,19 +432,19 @@ export async function executeApprovedMerge(approvalId: string, executionId: stri
     );
   }
 
-  await sealExecutionWorkspace(executionId);
+  await sealExecutionWorkspace(resolvedExecutionId);
   await prisma.$transaction([
     prisma.task.update({ where: { id: approval.taskId }, data: { status: 'SUCCEEDED' } }),
     prisma.auditEvent.create({
       data: {
         taskId: approval.taskId,
-        executionId,
+        executionId: resolvedExecutionId,
         eventType: 'github.pr.merged',
         actorType: 'human',
         actorId: approval.actorId,
         payload: {
           repository: `${repo.owner}/${repo.name}`,
-          pullRequestNumber,
+          pullRequestNumber: resolvedPullRequestNumber,
           mergeSha: mergeBody.sha ?? null,
           approvalId,
           approvedByUserId: approval.actorId,
@@ -377,9 +459,18 @@ export async function executeApprovedMerge(approvalId: string, executionId: stri
     merged: true as const,
     idempotentReplay: false,
     recovered: false,
-    pullRequestNumber,
+    pullRequestNumber: resolvedPullRequestNumber,
     mergeSha: mergeBody.sha ?? null,
     approvalId,
     approvedByUserId: approval.actorId,
   };
+}
+
+export async function executeHumanApprovedMerge(approvalId: string, humanActorId: string, reason?: string) {
+  const decision = await recordHumanMergeDecision(approvalId, humanActorId, 'APPROVE', reason);
+  const approval = decision.approval;
+  if (!approval.executionId || !approval.resourceId) {
+    throw new MergePolicyError('Approval is missing execution or pull request context.', 'merge.approval_resource_mismatch', 409);
+  }
+  return executeApprovedMerge(approvalId, approval.executionId, Number(approval.resourceId));
 }
