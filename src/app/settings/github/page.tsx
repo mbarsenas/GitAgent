@@ -1,6 +1,8 @@
+import { redirect } from 'next/navigation';
 import { ControlPlaneShell } from '@/app/components/control-plane-shell';
+import { requireCurrentUser } from '@/lib/auth/current-user';
 import { prisma } from '@/lib/db/prisma';
-import { getGitHubAppConfig, isGitHubAppConfigured } from '@/lib/github/config';
+import { getGitHubAppConfig } from '@/lib/github/config';
 import { verifyGitHubInstallation } from '@/lib/github/auth';
 import { RepositoryActions } from './repository-actions';
 
@@ -28,15 +30,30 @@ const failureStyle = {
 };
 
 export default async function GitHubConnectionPage() {
+  let session;
+  try {
+    session = await requireCurrentUser();
+  } catch {
+    redirect('/signin');
+  }
+
+  const user = await prisma.user.findUnique({
+    where: { id: session.userId },
+    select: { id: true, githubInstallationId: true },
+  });
+
+  if (!user) redirect('/signin');
+
   const repositories = await prisma.repository.findMany({
-    where: { provider: 'github' },
+    where: { provider: 'github', userId: user.id },
     orderBy: [{ owner: 'asc' }, { name: 'asc' }],
     take: 50,
   });
 
   const config = getGitHubAppConfig();
-  const configured = isGitHubAppConfigured(config);
-  const verification = configured ? await verifyGitHubInstallation() : null;
+  const installationId = user.githubInstallationId;
+  const configured = Boolean(config.appId && config.appSlug && installationId && (config.privateKey || config.privateKeyPath));
+  const verification = configured && installationId ? await verifyGitHubInstallation(installationId) : null;
   const connected = verification?.ok === true;
   const discoveredRepositories = verification?.ok ? verification.repositories : [];
   const statusText = connected ? '✓ CONNECTED' : configured ? 'AUTH FAILED' : 'NOT CONNECTED';
@@ -66,7 +83,7 @@ export default async function GitHubConnectionPage() {
 
             <div className="guardrail-list panel">
               <div><span>App slug</span><strong>{config.appSlug}</strong></div>
-              <div><span>Installation ID</span><strong>{config.installationId || 'Not configured'}</strong></div>
+              <div><span>Installation ID</span><strong>{installationId || 'Not connected to this account'}</strong></div>
               <div><span>Credential model</span><strong>Short-lived installation tokens</strong></div>
               <div>
                 <span>Repository access</span>
@@ -118,12 +135,12 @@ export default async function GitHubConnectionPage() {
           <div className="panel-head">
             <div><span className="panel-label">GITHUB INSTALLATION</span><h2>Repositories returned by GitHub</h2></div>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
-              {connected && config.installationId ? <RepositoryActions installationId={config.installationId} /> : null}
+              {connected && installationId ? <RepositoryActions installationId={installationId} /> : null}
               <span className="counter" style={connected ? successStyle : undefined}>{discoveredRepositories.length}</span>
             </div>
           </div>
           {discoveredRepositories.length === 0 ? (
-            <div style={{ padding: 16, color: 'var(--muted)', fontSize: 11 }}>No repositories returned by the live GitHub App installation.</div>
+            <div style={{ padding: 16, color: 'var(--muted)', fontSize: 11 }}>No repositories returned by the GitHub App installation connected to this account.</div>
           ) : (
             <div className="event-table">
               {discoveredRepositories.map((repo) => (
@@ -147,7 +164,7 @@ export default async function GitHubConnectionPage() {
             <span className="counter">{repositories.length}</span>
           </div>
           {repositories.length === 0 ? (
-            <div style={{ padding: 16, color: 'var(--muted)', fontSize: 11 }}>No GitHub repositories have been imported into GitAgent yet.</div>
+            <div style={{ padding: 16, color: 'var(--muted)', fontSize: 11 }}>No GitHub repositories have been imported for this account yet.</div>
           ) : (
             <div className="event-table">
               {repositories.map((repo) => (
