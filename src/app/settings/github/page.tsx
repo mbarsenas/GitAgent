@@ -2,6 +2,7 @@ import { ControlPlaneShell } from '@/app/components/control-plane-shell';
 import { prisma } from '@/lib/db/prisma';
 import { getGitHubAppConfig, isGitHubAppConfigured } from '@/lib/github/config';
 import { verifyGitHubInstallation } from '@/lib/github/auth';
+import { RepositoryActions } from './repository-actions';
 
 export const dynamic = 'force-dynamic';
 
@@ -115,7 +116,10 @@ export default async function GitHubConnectionPage() {
       <section className="panel" style={{ marginTop: 12 }}>
         <div className="panel-head">
           <div><span className="panel-label">GITHUB INSTALLATION</span><h2>Repositories returned by GitHub</h2></div>
-          <span className="counter" style={connected ? successStyle : undefined}>{discoveredRepositories.length}</span>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+            {connected && config.installationId ? <RepositoryActions installationId={config.installationId} /> : null}
+            <span className="counter" style={connected ? successStyle : undefined}>{discoveredRepositories.length}</span>
+          </div>
         </div>
         {discoveredRepositories.length === 0 ? (
           <div style={{ padding: 16, color: 'var(--muted)', fontSize: 11 }}>No repositories returned by the live GitHub App installation.</div>
