@@ -1,0 +1,70 @@
+import { prisma } from '@/lib/db/prisma';
+import {
+  authorizeWorkspaceWrite,
+  provisionExecutionWorkspace,
+} from '@/lib/governance/workspace';
+
+const POLICY_VERSION = '2026-09-16.1';
+
+export async function evaluateProtectedBranchWrite(
+  executionId: string,
+  targetBranch: string,
+) {
+  const execution = await prisma.execution.findUnique({
+    where: { id: executionId },
+    include: { task: { include: { repository: true } } },
+  });
+  if (!execution) throw new Error('Execution not found.');
+
+  const repository = execution.task.repository;
+  if (targetBranch === repository.defaultBranch) {
+    await prisma.auditEvent.create({
+      data: {
+        taskId: execution.taskId,
+        executionId,
+        eventType: 'policy.branch_write.denied',
+        actorType: 'agent',
+        actorId: execution.agentId,
+        payload: {
+          repository: `${repository.owner}/${repository.name}`,
+          targetBranch,
+          decision: 'DENY',
+          reasonCode: 'policy.protected_branch_write_denied',
+          githubRequestSent: false,
+          policyVersion: POLICY_VERSION,
+          severity: 'high',
+        },
+      },
+    });
+
+    return {
+      allowed: false as const,
+      decision: 'DENY' as const,
+      reasonCode: 'policy.protected_branch_write_denied',
+      githubRequestSent: false,
+    };
+  }
+
+  return {
+    allowed: true as const,
+    decision: 'ALLOW' as const,
+    reasonCode: 'policy.branch_target_allowed',
+    githubRequestSent: false,
+  };
+}
+
+export async function evaluateWorkspaceWrite(
+  executionId: string,
+  requestedWorkspaceExecutionId: string,
+) {
+  const execution = await prisma.execution.findUnique({ where: { id: executionId } });
+  if (!execution) throw new Error('Execution not found.');
+
+  const workspace = await provisionExecutionWorkspace(executionId);
+  const requestedKey =
+    requestedWorkspaceExecutionId === executionId
+      ? workspace.workspaceKey
+      : `execution:${requestedWorkspaceExecutionId}`;
+
+  return authorizeWorkspaceWrite(executionId, requestedKey, execution.agentId);
+}
