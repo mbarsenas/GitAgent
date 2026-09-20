@@ -67,7 +67,13 @@ export async function createReviewInstallationToken(owner?: string, repo?: strin
   const config = reviewConfig();
   if (!isReviewAppConfigured()) throw new Error('GitHub Review App is not fully configured.');
 
-  const installationId = config.installationId || (owner && repo ? await discoverReviewInstallationId(owner, repo) : '');
+  // Repository-specific discovery is authoritative for multi-tenant use.
+  // The legacy environment installation ID is only a fallback for callers
+  // that do not provide a repository.
+  const installationId = owner && repo
+    ? await discoverReviewInstallationId(owner, repo)
+    : config.installationId;
+
   if (!installationId) {
     throw new Error('GitHub Review App installation is not configured for this repository.');
   }
