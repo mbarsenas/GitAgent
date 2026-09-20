@@ -43,12 +43,14 @@ enum WorkspaceStatus {
 }
 
 model User {
-  id        String     @id @default(cuid())
-  email     String     @unique
-  name      String?
-  createdAt DateTime   @default(now())
-  tasks     Task[]     @relation("TaskInitiator")
-  approvals Approval[] @relation("ApprovalActor")
+  id                   String     @id @default(cuid())
+  email                String     @unique
+  name                 String?
+  githubInstallationId String?    @unique
+  createdAt            DateTime   @default(now())
+  tasks                Task[]     @relation("TaskInitiator")
+  approvals            Approval[] @relation("ApprovalActor")
+  repositories         Repository[]
 }
 
 model Repository {
@@ -58,6 +60,8 @@ model Repository {
   owner         String
   name          String
   defaultBranch String               @default("main")
+  userId        String?
+  user          User?                @relation(fields: [userId], references: [id])
   createdAt     DateTime             @default(now())
   updatedAt     DateTime             @updatedAt
   tasks         Task[]
@@ -65,6 +69,7 @@ model Repository {
   workspaces    ExecutionWorkspace[]
 
   @@unique([provider, externalId])
+  @@index([userId, provider])
 }
 
 model Agent {
