@@ -176,7 +176,7 @@ export async function runGovernedDemo() {
     }
 
     const branch = await createGovernedBranch(execution.id);
-    const change = await createGovernedChange(execution.id, branch.branch);
+    const change = await createGovernedChange(execution.id, branch.branch, []);
     const selfApproval = await attemptPullRequestApproval(
       execution.id,
       change.pullRequestNumber,
