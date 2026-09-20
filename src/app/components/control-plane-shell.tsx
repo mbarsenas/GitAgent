@@ -5,6 +5,7 @@ const navItems = [
   { label: 'Executions', href: '/executions' },
   { label: 'Approvals', href: '/approvals' },
   { label: 'New task', href: '/tasks/new' },
+  { label: 'AI Policy Builder', href: '/policy-builder' },
   { label: 'Audit', href: '/audit' },
   { label: 'GitHub', href: '/settings/github' },
 ];
