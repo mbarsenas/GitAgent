@@ -14,9 +14,10 @@ const permissionRows = [
 ];
 
 const successStyle = {
-  border: '1px solid #4f7767',
-  background: 'rgba(105, 151, 130, 0.14)',
-  color: '#b8d8c7',
+  border: '1px solid #39ff14',
+  background: 'rgba(57, 255, 20, 0.14)',
+  color: '#39ff14',
+  boxShadow: '0 0 12px rgba(57, 255, 20, 0.22)',
 };
 
 const failureStyle = {
