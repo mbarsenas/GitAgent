@@ -14,15 +14,15 @@ const permissionRows = [
 ];
 
 const successStyle = {
-  border: '1px solid #236b45',
-  background: 'rgba(35, 107, 69, 0.16)',
-  color: '#63d69a',
+  border: '1px solid #4f7767',
+  background: 'rgba(105, 151, 130, 0.14)',
+  color: '#b8d8c7',
 };
 
 const failureStyle = {
-  border: '1px solid #5b3131',
-  background: 'rgba(91, 49, 49, 0.14)',
-  color: '#d9a2a2',
+  border: '1px solid #7a5156',
+  background: 'rgba(140, 84, 91, 0.13)',
+  color: '#e1b9bc',
 };
 
 export default async function GitHubConnectionPage() {
@@ -57,17 +57,17 @@ export default async function GitHubConnectionPage() {
           <span className="counter" style={connected ? successStyle : configured ? failureStyle : undefined}>{statusText}</span>
         </div>
         <div style={{ padding: 16, display: 'grid', gap: 14 }}>
-          <p style={{ margin: 0, color: '#98a2b1', maxWidth: 920, lineHeight: 1.6 }}>
+          <p style={{ margin: 0, color: 'var(--muted)', maxWidth: 920, lineHeight: 1.6 }}>
             GitAgent uses a GitHub App installation rather than a personal access token. The connection badge is based on a live installation-token exchange with GitHub.
           </p>
 
-          <div className="guardrail-list" style={{ border: '1px solid #242a33' }}>
+          <div className="guardrail-list panel">
             <div><span>App slug</span><strong>{config.appSlug}</strong></div>
             <div><span>Installation ID</span><strong>{config.installationId || 'Not configured'}</strong></div>
             <div><span>Credential model</span><strong>Short-lived installation tokens</strong></div>
             <div>
               <span>Repository access</span>
-              <strong style={connected ? { color: '#63d69a' } : undefined}>
+              <strong style={connected ? { color: '#b8d8c7' } : undefined}>
                 {connected ? `✓ Verified (${discoveredRepositories.length} repositor${discoveredRepositories.length === 1 ? 'y' : 'ies'})` : 'Not verified'}
               </strong>
             </div>
@@ -102,11 +102,11 @@ export default async function GitHubConnectionPage() {
 
         <article className="panel">
           <div className="panel-head"><div><span className="panel-label">BOUNDARY</span><h2>How GitAgent constrains access</h2></div></div>
-          <div style={{ padding: 16, color: '#98a2b1', fontSize: 12, lineHeight: 1.65 }}>
-            <p><strong style={{ color: '#e7eaf0' }}>Implementation identity:</strong> branch creation, assigned-branch writes, draft PR creation.</p>
-            <p><strong style={{ color: '#e7eaf0' }}>Review identity:</strong> read diff, comment, approve/deny under separate credentials.</p>
-            <p><strong style={{ color: '#e7eaf0' }}>Merge:</strong> denied to implementation agents by default.</p>
-            <p><strong style={{ color: '#e7eaf0' }}>Audit:</strong> every GitHub API operation is persisted with task, execution, agent, repository, policy version, and result.</p>
+          <div style={{ padding: 16, color: 'var(--muted)', fontSize: 12, lineHeight: 1.65 }}>
+            <p><strong style={{ color: 'var(--text)' }}>Implementation identity:</strong> branch creation, assigned-branch writes, draft PR creation.</p>
+            <p><strong style={{ color: 'var(--text)' }}>Review identity:</strong> read diff, comment, approve/deny under separate credentials.</p>
+            <p><strong style={{ color: 'var(--text)' }}>Merge:</strong> denied to implementation agents by default.</p>
+            <p><strong style={{ color: 'var(--text)' }}>Audit:</strong> every GitHub API operation is persisted with task, execution, agent, repository, policy version, and result.</p>
           </div>
         </article>
       </section>
@@ -117,17 +117,17 @@ export default async function GitHubConnectionPage() {
           <span className="counter" style={connected ? successStyle : undefined}>{discoveredRepositories.length}</span>
         </div>
         {discoveredRepositories.length === 0 ? (
-          <div style={{ padding: 16, color: '#7f8997', fontSize: 11 }}>No repositories returned by the live GitHub App installation.</div>
+          <div style={{ padding: 16, color: 'var(--muted)', fontSize: 11 }}>No repositories returned by the live GitHub App installation.</div>
         ) : (
           <div className="event-table">
             {discoveredRepositories.map((repo) => (
-              <div className="event-row" key={repo.id} style={{ background: 'rgba(35, 107, 69, 0.08)' }}>
+              <div className="event-row" key={repo.id} style={{ background: 'rgba(105, 151, 130, 0.08)' }}>
                 <div className="event-summary">{repo.full_name}</div>
                 <div className="event-evidence">
                   <span className="mono muted">github</span>
                   <span className="severity info">{repo.default_branch}</span>
                   <strong className="mono">{repo.id}</strong>
-                  <span style={{ color: '#63d69a' }}>✓ {repo.private ? 'Private' : 'Public'} · live installation access</span>
+                  <span style={{ color: '#b8d8c7' }}>✓ {repo.private ? 'Private' : 'Public'} · live installation access</span>
                 </div>
               </div>
             ))}
@@ -141,7 +141,7 @@ export default async function GitHubConnectionPage() {
           <span className="counter">{repositories.length}</span>
         </div>
         {repositories.length === 0 ? (
-          <div style={{ padding: 16, color: '#7f8997', fontSize: 11 }}>No GitHub repositories have been imported into GitAgent yet.</div>
+          <div style={{ padding: 16, color: 'var(--muted)', fontSize: 11 }}>No GitHub repositories have been imported into GitAgent yet.</div>
         ) : (
           <div className="event-table">
             {repositories.map((repo) => (
