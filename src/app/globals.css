@@ -446,3 +446,20 @@ textarea { resize: vertical; }
 @keyframes ga-ref-float{0%,100%{transform:translateY(0) rotateZ(5.1deg) rotateY(-2.2deg)}50%{transform:translateY(-11px) rotateZ(4.4deg) rotateY(-1.4deg)}}
 .ga2-consolebar{height:65px;padding:0 25px}.ga2-consolebody{grid-template-columns:162px 1fr;min-height:470px}.ga2-consolebody aside{padding:20px 13px}.ga2-consolebody aside img{width:62px;height:62px}.ga2-work{padding:25px 23px}.ga2-boundary{height:86px}.ga2-flow{height:61px}.ga2-code{padding:17px}.ga2-code code{font-size:12.5px}.ga2-review{padding:17px;margin-top:15px}.ga2-review button{padding:14px 24px;font-size:14px;background:#51e59e}.ga2-evidence{right:-1%;top:178px;padding:12px 19px;border-color:#2bc682;box-shadow:0 0 20px rgba(26,217,128,.08)}
 }
+
+/* Reference correction — keep hero elements independent, no collisions */
+@media(min-width:1101px){
+.ga2-hero{grid-template-columns:minmax(0,45%) minmax(0,55%);overflow:visible}
+.ga2-copy{position:relative;z-index:7;min-width:0}
+.ga2-copy h1{font-size:clamp(68px,5.35vw,88px);max-width:650px}
+.ga2-stage{position:relative;z-index:3;min-width:0}
+.ga2-console{width:98%;left:1%;top:128px;transform:rotateZ(4deg) rotateY(-1.5deg)}
+@keyframes ga-ref-float{0%,100%{transform:translateY(0) rotateZ(4deg) rotateY(-1.5deg)}50%{transform:translateY(-8px) rotateZ(3.6deg) rotateY(-1deg)}}
+.ga2-ghost{width:315px;height:315px;right:10%;top:-62px}
+.ga2-ghost img{width:112%;height:112%;image-rendering:auto}
+.ga2-evidence{right:2%;top:145px}
+.ga2-primary{width:330px;height:64px;font-size:18px;white-space:nowrap}
+.ga2-primary .ga2-gh{flex:0 0 34px;width:34px;height:34px}
+.ga2-secondary{height:64px}
+.ga2-proof{white-space:nowrap}
+}
