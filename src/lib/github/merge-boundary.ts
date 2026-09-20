@@ -56,7 +56,7 @@ async function auditMergeDenial(input: {
   executionId: string;
   approvalId: string;
   pullRequestNumber: number;
-  actorType: 'system' | 'human' | 'agent';
+  actorType: 'system' | 'human';
   actorId: string;
   reasonCode: string;
   message: string;
@@ -80,38 +80,6 @@ async function auditMergeDenial(input: {
       },
     },
   });
-}
-
-export async function attemptMergeAsAgent(executionId: string, pullRequestNumber: number, actorAgentId: string) {
-  const execution = await prisma.execution.findUnique({
-    where: { id: executionId },
-    include: { task: true },
-  });
-  if (!execution) throw new MergePolicyError('Execution not found.', 'merge.execution_not_found', 404);
-
-  const reasonCode =
-    actorAgentId === execution.agentId ? 'policy.implementation_agent_merge_denied' : 'policy.agent_merge_denied';
-
-  await auditMergeDenial({
-    taskId: execution.taskId,
-    executionId,
-    approvalId: 'none',
-    pullRequestNumber,
-    actorType: 'agent',
-    actorId: actorAgentId,
-    reasonCode,
-    message: 'Agents may not merge pull requests. A human merge approval is required.',
-    githubRequestSent: false,
-  });
-
-  return {
-    allowed: false as const,
-    decision: 'DENY' as const,
-    reasonCode,
-    githubRequestSent: false,
-    actorAgentId,
-    implementationAgentId: execution.agentId,
-  };
 }
 
 export async function requestHumanMergeApproval(executionId: string, pullRequestNumber: number) {
@@ -150,7 +118,6 @@ export async function requestHumanMergeApproval(executionId: string, pullRequest
       resourceType: 'github.pull_request',
       resourceId,
       status: 'PENDING',
-      actorType: 'human',
       actorId: null,
     },
   });
@@ -214,7 +181,6 @@ export async function approveHumanMerge(input: {
     where: { id: approval.id },
     data: {
       status: 'APPROVED',
-      actorType: 'human',
       actorId: input.userId,
       decidedAt: new Date(),
     },
@@ -267,7 +233,7 @@ export async function recordHumanMergeDecision(
 
   const updated = await prisma.approval.update({
     where: { id: approvalId },
-    data: { status: 'REJECTED', actorType: 'human', actorId: humanActorId, reason, decidedAt: new Date() },
+    data: { status: 'REJECTED', actorId: humanActorId, reason, decidedAt: new Date() },
   });
   await prisma.auditEvent.create({
     data: {
@@ -304,7 +270,7 @@ export async function executeApprovedMerge(approvalId: string, executionId?: str
   if (approval.executionId !== resolvedExecutionId) {
     throw new MergePolicyError('Approval does not belong to this execution.', 'merge.approval_execution_mismatch', 409);
   }
-  if (approval.status !== 'APPROVED' || approval.actorType !== 'human' || !approval.actorId) {
+  if (approval.status !== 'APPROVED' || !approval.actorId) {
     throw new MergePolicyError('Human approval is required before merge.', 'merge.human_approval_required', 409);
   }
 
@@ -467,10 +433,43 @@ export async function executeApprovedMerge(approvalId: string, executionId?: str
 }
 
 export async function executeHumanApprovedMerge(approvalId: string, humanActorId: string, reason?: string) {
-  const decision = await recordHumanMergeDecision(approvalId, humanActorId, 'APPROVE', reason);
-  const approval = decision.approval;
-  if (!approval.executionId || !approval.resourceId) {
+  const approval = await prisma.approval.findUnique({ where: { id: approvalId } });
+  if (!approval?.executionId || !approval.resourceId) {
     throw new MergePolicyError('Approval is missing execution or pull request context.', 'merge.approval_resource_mismatch', 409);
   }
+  await recordHumanMergeDecision(approvalId, humanActorId, 'APPROVE', reason);
   return executeApprovedMerge(approvalId, approval.executionId, Number(approval.resourceId));
+}
+
+export async function attemptMergeAsAgent(executionId: string, pullRequestNumber: number, actorAgentId: string) {
+  const execution = await prisma.execution.findUnique({ where: { id: executionId } });
+  if (!execution) throw new MergePolicyError('Execution not found.', 'merge.execution_not_found', 404);
+
+  const reasonCode = actorAgentId === execution.agentId
+    ? 'policy.implementation_agent_merge_denied'
+    : 'policy.agent_merge_denied';
+
+  await prisma.auditEvent.create({
+    data: {
+      taskId: execution.taskId,
+      executionId,
+      eventType: 'policy.merge.denied',
+      actorType: 'agent',
+      actorId: actorAgentId,
+      payload: {
+        pullRequestNumber,
+        decision: 'DENY',
+        reasonCode,
+        githubRequestSent: false,
+        policyVersion: POLICY_VERSION,
+      },
+    },
+  });
+
+  return {
+    allowed: false as const,
+    decision: 'DENY' as const,
+    reasonCode,
+    githubRequestSent: false,
+  };
 }
