@@ -1,7 +1,10 @@
 'use client';
 
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
 import { ControlPlaneShell } from '@/app/components/control-plane-shell';
+
+type Option = { id: string; name?: string; owner?: string; email?: string; slug?: string };
+type Bootstrap = { repositories: Option[]; agents: Option[]; users: Option[] };
 
 type Draft = {
   summary: string;
@@ -30,10 +33,18 @@ export default function PolicyBuilderPage() {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [bootstrap, setBootstrap] = useState<Bootstrap>({ repositories: [], agents: [], users: [] });
+  const [reviewing, setReviewing] = useState(false);
+  const [applying, setApplying] = useState(false);
+  const [applied, setApplied] = useState<{ policyVersion: string; repository: string } | null>(null);
+
+  useEffect(() => {
+    fetch('/api/tasks').then((r) => r.json()).then(setBootstrap).catch(() => setError('Could not load repositories and agents.'));
+  }, []);
 
   async function generate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setLoading(true); setError(''); setDraft(null);
+    setLoading(true); setError(''); setDraft(null); setReviewing(false); setApplied(null);
     const description = String(new FormData(event.currentTarget).get('description') || '');
     try {
       const response = await fetch('/api/policy-builder', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ description }) });
@@ -42,6 +53,25 @@ export default function PolicyBuilderPage() {
       setDraft(body.draft);
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
     finally { setLoading(false); }
+  }
+
+  async function applyPolicy(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!draft) return;
+    setApplying(true); setError('');
+    const form = new FormData(event.currentTarget);
+    try {
+      const response = await fetch('/api/policy-builder/apply', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ repositoryId: form.get('repositoryId'), agentId: form.get('agentId'), actorId: form.get('actorId'), draft }),
+      });
+      const body = await response.json();
+      if (!response.ok || !body.ok) throw new Error(body.error || 'Policy apply failed');
+      setApplied({ policyVersion: body.policyVersion, repository: body.repository });
+      setReviewing(false);
+    } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+    finally { setApplying(false); }
   }
 
   return (
@@ -73,7 +103,27 @@ export default function PolicyBuilderPage() {
         <article className="panel" style={{ gridColumn: '1 / -1' }}>
           <div className="panel-head"><div><span className="panel-label">GENERATED INSTRUCTIONS</span><h2>GitAgent constraint instructions</h2></div></div>
           <pre style={{ margin: 0, padding: 16, whiteSpace: 'pre-wrap', lineHeight: 1.6, color: 'var(--text)', fontSize: 11 }}>{draft.instructions}</pre>
+          <div style={{ padding: 16, borderTop: '1px solid var(--border)', display: 'flex', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+            <button className="ghost-button" type="button" onClick={() => { setDraft(null); setReviewing(false); }}>← Edit request</button>
+            <button className="ghost-button" type="button" onClick={() => { setDraft(null); setReviewing(false); }}>Regenerate</button>
+            <button className="solid-button" type="button" onClick={() => setReviewing(true)}>Review & Apply Policy →</button>
+          </div>
         </article>
+
+        {reviewing ? <article className="panel" style={{ gridColumn: '1 / -1' }}>
+          <div className="panel-head"><div><span className="panel-label">FINAL HUMAN REVIEW</span><h2>Choose the target and explicitly apply this policy</h2></div><span className="counter" style={{ color: 'var(--warn)' }}>NOT APPLIED YET</span></div>
+          <form onSubmit={applyPolicy} style={{ padding: 16, display: 'grid', gap: 16 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12 }}>
+              <label><span className="label">Repository</span><select name="repositoryId" required style={{ width: '100%', marginTop: 6 }}>{bootstrap.repositories.map((r) => <option key={r.id} value={r.id}>{r.owner ? `${r.owner} / ` : ''}{r.name}</option>)}</select></label>
+              <label><span className="label">Agent</span><select name="agentId" required style={{ width: '100%', marginTop: 6 }}>{bootstrap.agents.map((a) => <option key={a.id} value={a.id}>{a.name ?? a.slug}</option>)}</select></label>
+              <label><span className="label">Human approver</span><select name="actorId" required style={{ width: '100%', marginTop: 6 }}>{bootstrap.users.map((u) => <option key={u.id} value={u.id}>{u.name ?? u.email}</option>)}</select></label>
+            </div>
+            <div className="notice" style={{ margin: 0 }}>Applying replaces this agent's current capability grants for the selected repository. GitAgent re-enforces immutable boundaries server-side and records a <strong>policy.applied</strong> audit event.</div>
+            <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}><input type="checkbox" required /><span>I reviewed the effective permissions, approval gates, hard boundaries, and generated instructions.</span></label>
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}><button className="ghost-button" type="button" onClick={() => setReviewing(false)}>Cancel</button><button className="solid-button" disabled={applying} type="submit">{applying ? 'Applying governed policy…' : 'Confirm & Apply Policy'}</button></div>
+          </form>
+        </article> : null}
+        {applied ? <div className="notice success" style={{ gridColumn: '1 / -1', margin: 0 }}><strong>✓ Policy applied.</strong> {applied.policyVersion} is now active for {applied.repository}. The change was written to the audit timeline.</div> : null}
       </section> : null}
     </ControlPlaneShell>
   );
