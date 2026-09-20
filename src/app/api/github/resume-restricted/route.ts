@@ -32,7 +32,7 @@ export async function POST(request: Request) {
     await prisma.auditEvent.create({ data: { taskId: task.id, executionId: execution.id, eventType: 'restricted.execution.resumed', actorType: 'human', actorId: approval.actorId, payload: { approvalId: approval.id, capabilityGrantIds: grantIds, policyVersion: '2026-09-16.1' } } });
     try {
       const branch = await createGovernedBranch(execution.id);
-      const change = await createGovernedChange(execution.id, branch.branch);
+      const change = await createGovernedChange(execution.id, branch.branch, []);
       const selfApproval = await attemptPullRequestApproval(execution.id, change.pullRequestNumber, task.agent.id);
       const independentReview = await attemptPullRequestApproval(execution.id, change.pullRequestNumber, reviewer.id);
       const independentApproval = await attemptPullRequestApproval(execution.id, change.pullRequestNumber, reviewer.id);
