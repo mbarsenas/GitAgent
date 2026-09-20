@@ -440,3 +440,33 @@ textarea { resize: vertical; }
   .visual-sidebar { display:none; }
   .hero-mascot { width:190px;height:190px;right:2%;top:0; }
 }
+
+
+/* Screenshot-match correction: desktop hero proportions */
+@media (min-width:1101px) {
+  .marketing-nav { width:100%;min-height:118px;padding:0 4.4vw; }
+  .marketing-brand { gap:18px; }
+  .marketing-brand strong { font-size:32px; }
+  .marketing-brand strong::first-letter { color:#eef9f2; }
+  .marketing-brand .gitagent-mascot,.marketing-brand .gitagent-mascot svg { width:78px;height:78px; }
+  .marketing-nav nav { gap:48px; }
+  .marketing-nav nav>a { font-size:16px; }
+  .marketing-console { padding:18px 34px!important;border-radius:999px!important;box-shadow:0 0 34px rgba(128,255,67,.22); }
+  .marketing-hero { width:100%;min-height:835px;padding:125px 4.4vw 72px;grid-template-columns:46% 54%;gap:0;align-items:center;overflow:hidden; }
+  .marketing-copy { position:relative;z-index:3;align-self:center; }
+  .marketing-kicker { font-size:13px;letter-spacing:.17em;margin-bottom:42px; }
+  .marketing-copy h1 { font-size:clamp(66px,5.65vw,88px);line-height:.96;letter-spacing:-.055em;max-width:700px;margin:0 0 28px; }
+  .marketing-copy h1 br { display:none; }
+  .marketing-copy h1 em { display:inline; }
+  .marketing-lede { max-width:650px;font-size:18px;line-height:1.6;margin-top:28px; }
+  .marketing-actions { margin-top:38px; }
+  .marketing-primary,.marketing-secondary { min-height:68px;font-size:16px; }
+  .marketing-primary { min-width:325px; }
+  .marketing-secondary { min-width:225px; }
+  .marketing-proof { margin-top:36px;gap:32px;font-size:12px; }
+  .marketing-visual { min-height:650px;align-self:center;transform:translateX(2.5%); }
+  .hero-mascot { width:330px;height:330px;right:12%;top:-2%;color:rgba(111,239,177,.3); }
+  .visual-window { width:108%;margin-left:-2%;top:190px;transform-origin:50% 50%; }
+  .chip-two { right:3%;top:176px; }
+  .chip-one { left:1%;bottom:25px; }
+}
