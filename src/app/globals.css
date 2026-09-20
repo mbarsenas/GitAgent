@@ -421,3 +421,37 @@ textarea { resize: vertical; }
 .ga2-review{margin-top:14px;border:1px solid #245f45;padding:16px;display:flex;align-items:center;justify-content:space-between}.ga2-review strong,.ga2-review small{display:block}.ga2-review strong{font-size:14px}.ga2-review small{margin-top:6px;color:#8aa898;font:9px ui-monospace,monospace}.ga2-review button{border:0;background:#62efab;color:#03170e;padding:14px 20px;font-weight:900}.ga2-foot{display:flex;justify-content:space-between;margin-top:15px;color:#9ab6a7;font:10px ui-monospace,monospace}.ga2-evidence{position:absolute;right:1%;top:177px;z-index:6;border:1px solid #277c56;background:#073222;border-radius:999px;padding:12px 18px;color:#b7d5c6;font:700 10px ui-monospace,monospace}
 @media(max-width:1100px){.ga2-nav nav{gap:20px}.ga2-hero{grid-template-columns:1fr;padding-top:70px}.ga2-copy h1{font-size:72px}.ga2-stage{min-height:650px;margin-top:35px}.ga2-console{width:94%;left:3%}}
 @media(max-width:720px){.ga2-nav{height:86px;padding:0 20px}.ga2-brand img{width:54px;height:54px}.ga2-brand strong{font-size:22px}.ga2-nav nav>a:not(.ga2-account){display:none}.ga2-account{padding:13px 18px}.ga2-hero{padding:62px 22px 40px}.ga2-copy h1{font-size:clamp(50px,14vw,70px)}.ga2-lede{font-size:16px}.ga2-actions{flex-direction:column}.ga2-primary,.ga2-secondary{min-width:0;width:100%}.ga2-proof{flex-direction:column;gap:10px}.ga2-stage{min-height:470px}.ga2-ghost{width:190px;height:190px}.ga2-console{top:100px;transform:rotateZ(1deg);animation:none}.ga2-consolebody{grid-template-columns:1fr}.ga2-consolebody aside{display:none}.ga2-work{padding:14px}.ga2-flow{display:none}.ga2-evidence{top:80px}.ga2-consolebar{grid-template-columns:1fr 1fr}.ga2-consolebar i{display:none}}
+
+
+/* GitAgentFlow final hero polish */
+@media (min-width:1101px){
+  .ga2-hero{padding-top:88px;grid-template-columns:45.5% 54.5%}
+  .ga2-copy h1{font-size:clamp(66px,5.55vw,90px);line-height:.97}
+  .ga2-stage{transform:translate(-1.2%,1%)}
+  .ga2-console{
+    width:102%;
+    left:-1%;
+    top:148px;
+    transform:rotateZ(2.25deg) rotateY(-1.25deg);
+    box-shadow:0 34px 78px rgba(0,0,0,.43),0 0 42px rgba(33,235,137,.075);
+    animation:ga2float-polished 8s ease-in-out infinite
+  }
+  @keyframes ga2float-polished{
+    0%,100%{transform:translateY(0) rotateZ(2.25deg) rotateY(-1.25deg)}
+    50%{transform:translateY(-8px) rotateZ(1.65deg) rotateY(-.65deg)}
+  }
+  .ga2-ghost{
+    width:300px;height:300px;right:12%;top:-34px;
+    opacity:.23;border-radius:0;
+    filter:sepia(1) saturate(3) hue-rotate(83deg) brightness(1.45) contrast(.88) drop-shadow(0 0 28px rgba(70,245,157,.18));
+    -webkit-mask-image:radial-gradient(circle at center,#000 0 42%,rgba(0,0,0,.86) 55%,transparent 72%);
+    mask-image:radial-gradient(circle at center,#000 0 42%,rgba(0,0,0,.86) 55%,transparent 72%)
+  }
+  .ga2-evidence{right:2%;top:166px;box-shadow:0 0 22px rgba(69,239,160,.08)}
+}
+.ga2-console{transition:filter .35s ease,box-shadow .35s ease}
+.ga2-console:hover{filter:brightness(1.035);box-shadow:0 38px 86px rgba(0,0,0,.46),0 0 50px rgba(33,235,137,.11)}
+.ga2-primary,.ga2-account{transition:transform .2s ease,box-shadow .2s ease,filter .2s ease}
+.ga2-primary:hover,.ga2-account:hover{transform:translateY(-2px);filter:brightness(1.04);box-shadow:0 13px 35px rgba(78,245,157,.22)}
+.ga2-secondary{transition:border-color .2s ease,background .2s ease,transform .2s ease}
+.ga2-secondary:hover{transform:translateY(-2px);border-color:#4cd995;background:rgba(10,57,39,.65)}
