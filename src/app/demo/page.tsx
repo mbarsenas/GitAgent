@@ -49,16 +49,16 @@ export default function DemoPage() {
         <div style={{ padding: 16, display: 'grid', gap: 16 }}>
           <div>
             <p className="kicker">What the agent attempts</p>
-            <p style={{ color: '#a9b2bf', maxWidth: 860, lineHeight: 1.6, marginBottom: 0 }}>
+            <p style={{ color: 'var(--muted)', maxWidth: 860, lineHeight: 1.6, marginBottom: 0 }}>
               GitAgent resolves the real seeded repository, task, agent, and execution records, then asks the implementation identity for the
               <code> review.approve </code> capability against its own work.
             </p>
           </div>
 
-          <div style={{ border: '1px solid #242a33', background: '#0c1015', padding: 14 }}>
+          <div style={{ border: '1px solid var(--border)', background: 'var(--panel-2)', padding: 14 }}>
             <p className="kicker" style={{ marginBottom: 8 }}>Expected policy behavior</p>
             <strong style={{ display: 'block', marginBottom: 6 }}>Block the request automatically.</strong>
-            <span style={{ color: '#8f99a6', fontSize: 12, lineHeight: 1.5 }}>
+            <span style={{ color: 'var(--muted)', fontSize: 12, lineHeight: 1.5 }}>
               The agent that created the change cannot approve that same change. Implementation and review identities are structurally separated.
             </span>
           </div>
@@ -70,22 +70,22 @@ export default function DemoPage() {
           </div>
 
           {result && (
-            <section style={{ borderTop: '1px solid #242a33', paddingTop: 18 }}>
-              <div style={{ border: '1px solid #303742', background: '#0d1117', padding: 16, marginBottom: 14 }}>
+            <section style={{ borderTop: '1px solid var(--border)', paddingTop: 18 }}>
+              <div style={{ border: '1px solid var(--border)', background: 'var(--panel-2)', padding: 16, marginBottom: 14 }}>
                 <p className="kicker">Result</p>
                 <h2 style={{ marginTop: 6 }}>{blocked ? 'Blocked automatically' : 'Unexpected result'}</h2>
-                <p style={{ color: '#a9b2bf', maxWidth: 860, lineHeight: 1.6, marginBottom: 0 }}>
+                <p style={{ color: 'var(--muted)', maxWidth: 860, lineHeight: 1.6, marginBottom: 0 }}>
                   {blocked
                     ? 'The implementation agent tried to approve its own work. GitAgent denied the action because self-approval is prohibited by the active governance policy.'
                     : result.message ?? 'The action was not denied as expected.'}
                 </p>
               </div>
 
-              <details style={{ border: '1px solid #242a33', background: '#0b0f14' }} open>
-                <summary style={{ cursor: 'pointer', padding: 12, color: '#dce2e9', fontWeight: 700 }}>
+              <details style={{ border: '1px solid var(--border)', background: 'var(--panel)' }} open>
+                <summary style={{ cursor: 'pointer', padding: 12, color: 'var(--text)', fontWeight: 700 }}>
                   Technical evidence
                 </summary>
-                <div className="guardrail-list" style={{ borderTop: '1px solid #242a33' }}>
+                <div className="guardrail-list" style={{ borderTop: '1px solid var(--border)' }}>
                   <div><span>Event</span><strong>capability.denied</strong></div>
                   <div><span>Capability</span><strong>review.approve</strong></div>
                   <div><span>Reason</span><strong>{result.reasonCode ?? 'none'}</strong></div>
