@@ -3,6 +3,7 @@ import { mkdtemp, rm, writeFile, mkdir } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { promisify } from 'node:util';
+import { prisma } from '@/lib/db/prisma';
 import { createInstallationToken } from '@/lib/github/auth';
 
 const execAsync = promisify(exec);
@@ -64,7 +65,21 @@ export async function validateRepositorySnapshot(input: {
   branch: string;
   files: Array<{ path: string; content: string }>;
 }) {
-  const token = await createInstallationToken();
+  const repository = await prisma.repository.findFirst({
+    where: { provider: 'github', owner: input.owner, name: input.name },
+    select: {
+      user: {
+        select: { githubInstallationId: true },
+      },
+    },
+  });
+
+  const installationId = repository?.user?.githubInstallationId;
+  if (!installationId) {
+    throw new Error('GitHub installation is not linked to the repository owner.');
+  }
+
+  const token = await createInstallationToken(installationId);
   const tempRoot = await mkdtemp(path.join(os.tmpdir(), 'gitagent-'));
   const repoDir = path.join(tempRoot, 'repo');
 
