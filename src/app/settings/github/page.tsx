@@ -69,7 +69,7 @@ export default async function GitHubConnectionPage() {
             <div><span>Credential model</span><strong>Short-lived installation tokens</strong></div>
             <div>
               <span>Repository access</span>
-              <strong style={connected ? { color: '#b8d8c7' } : undefined}>
+              <strong style={connected ? { color: '#39ff14', textShadow: '0 0 10px rgba(57, 255, 20, 0.25)' } : undefined}>
                 {connected ? `✓ Verified (${discoveredRepositories.length} repositor${discoveredRepositories.length === 1 ? 'y' : 'ies'})` : 'Not verified'}
               </strong>
             </div>
@@ -132,7 +132,7 @@ export default async function GitHubConnectionPage() {
                   <span className="mono muted">github</span>
                   <span className="severity info">{repo.default_branch}</span>
                   <strong className="mono">{repo.id}</strong>
-                  <span style={{ color: '#b8d8c7' }}>✓ {repo.private ? 'Private' : 'Public'} · live installation access</span>
+                  <span style={{ color: '#39ff14', textShadow: '0 0 10px rgba(57, 255, 20, 0.22)' }}>✓ {repo.private ? 'Private' : 'Public'} · live installation access</span>
                 </div>
               </div>
             ))}
