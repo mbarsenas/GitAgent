@@ -212,7 +212,7 @@ export async function performPullRequestReview(
     }
   }
 
-  const installation = await createReviewInstallationToken();
+  const installation = await createReviewInstallationToken(repo.owner, repo.name);
   const event = action === 'REVIEW' ? 'COMMENT' : 'APPROVE';
   const result = await github<{ id: number; state: string; html_url: string }>(
     `${API}/repos/${repo.owner}/${repo.name}/pulls/${pullRequestNumber}/reviews`,
