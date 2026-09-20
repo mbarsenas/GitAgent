@@ -2,6 +2,68 @@ import { prisma } from '@/lib/db/prisma';
 import { getGitHubAppConfig } from './config';
 import { listInstallationRepositories } from './auth';
 
+function agentSlug(prefix: string, repositoryId: string) {
+  return `${prefix}-${repositoryId}`.toLowerCase().replace(/[^a-z0-9-]+/g, '-').slice(0, 120);
+}
+
+async function ensureRepositoryAgents(repositoryId: string) {
+  const implementationSlug = agentSlug('gitagent-implementation', repositoryId);
+  const reviewerSlug = agentSlug('gitagent-review', repositoryId);
+
+  const implementation = await prisma.agent.upsert({
+    where: { slug: implementationSlug },
+    update: { repositoryId, status: 'ACTIVE' },
+    create: {
+      name: 'GitAgent Implementation',
+      slug: implementationSlug,
+      status: 'ACTIVE',
+      providerKey: 'openai',
+      model: process.env.OPENAI_MODEL || 'gpt-5.6-sol',
+      repositoryId,
+    },
+  });
+
+  const reviewer = await prisma.agent.upsert({
+    where: { slug: reviewerSlug },
+    update: { repositoryId, status: 'ACTIVE' },
+    create: {
+      name: 'GitAgent Reviewer',
+      slug: reviewerSlug,
+      status: 'ACTIVE',
+      providerKey: 'openai',
+      model: process.env.OPENAI_REVIEW_MODEL || process.env.OPENAI_MODEL || 'gpt-5.6-sol',
+      repositoryId,
+    },
+  });
+
+  const reviewGrant = await prisma.capabilityGrant.findFirst({
+    where: {
+      agentId: reviewer.id,
+      capability: 'review.approve',
+      resource: repositoryId,
+      effect: 'ALLOW',
+    },
+  });
+
+  if (!reviewGrant) {
+    await prisma.capabilityGrant.create({
+      data: {
+        agentId: reviewer.id,
+        capability: 'review.approve',
+        resource: repositoryId,
+        effect: 'ALLOW',
+        conditions: {
+          scope: 'independent-review',
+          repositoryId,
+          writableImplementationWorkspace: false,
+        },
+      },
+    });
+  }
+
+  return { implementation, reviewer };
+}
+
 export async function syncGitHubInstallationRepositories(userId: string, installationId: string) {
   const config = getGitHubAppConfig();
   const installation = await listInstallationRepositories(installationId);
@@ -119,6 +181,24 @@ export async function syncGitHubInstallationRepositories(userId: string, install
         },
       });
     }
+
+    const agents = await ensureRepositoryAgents(record.id);
+
+    await prisma.auditEvent.create({
+      data: {
+        eventType: 'github.repository.agents_ready',
+        actorType: 'SYSTEM',
+        actorId: userId,
+        payload: {
+          repositoryId: record.id,
+          fullName,
+          implementationAgentId: agents.implementation.id,
+          reviewerAgentId: agents.reviewer.id,
+          result: 'success',
+          policyVersion: '2026-09-16.1',
+        },
+      },
+    });
 
     synced.push(record);
   }
