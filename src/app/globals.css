@@ -23,6 +23,13 @@ button { cursor: pointer; }
 /* existing application styles preserved below via import cascade */
 @import url('/ga2-fix.css');
 
+/* Shared auth branding */
+.auth-page{min-height:100vh;background:radial-gradient(circle at 50% 22%,rgba(80,220,151,.11),transparent 32%),#061710;color:#eef9f2;display:flex;flex-direction:column;align-items:center;font-family:ui-sans-serif,system-ui,sans-serif;padding:44px 20px}
+.auth-brand{display:flex;align-items:center;gap:12px;margin-bottom:70px;font-size:18px;font-weight:800}
+.auth-brand img{width:52px;height:52px;border-radius:50%;object-fit:cover;border:2px solid #62e7a5;box-shadow:0 0 18px rgba(98,231,165,.18)}
+.auth-card{width:min(100%,520px);border:1px solid #315b49;background:linear-gradient(145deg,rgba(15,48,35,.98),rgba(7,27,19,.98));padding:42px;box-shadow:0 30px 70px rgba(0,0,0,.34)}
+.auth-card h1{font-size:40px;margin:14px 0 16px;letter-spacing:-.045em}.auth-card>p:not(.marketing-kicker):not(.auth-switch){color:#a5c0b3;line-height:1.65;font-size:14px}.auth-providers{display:grid;gap:12px;margin:30px 0 18px}.auth-github,.auth-google{min-height:54px;padding:0 18px;display:grid;grid-template-columns:38px 1fr auto;align-items:center;font-weight:800;transition:.2s ease}.auth-github{background:#72edb1;color:#061710}.auth-google{background:#fff;color:#17211c;border:1px solid #d9e1dc}.auth-github:hover,.auth-google:hover{transform:translateY(-3px);box-shadow:0 14px 30px rgba(0,0,0,.22)}.auth-card small{display:block;color:#7f9e90;line-height:1.55;font-size:10px}.auth-switch{margin:28px 0 0!important;padding-top:22px;border-top:1px solid #284c3c;color:#8ca99c!important;font-size:11px!important}.auth-switch a{color:#72edb1}.provider-logo{width:28px;height:28px;display:block}.github-logo{color:#0b1510}.google-logo{width:27px;height:27px}
+
 /* Pricing page */
 .pricing-page{min-height:100vh;background:radial-gradient(circle at 50% 0,rgba(80,220,151,.10),transparent 32%),#061710;color:#eef9f2;font-family:ui-sans-serif,system-ui,sans-serif;padding-bottom:80px}
 .pricing-nav{width:min(1120px,calc(100% - 48px));height:72px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid rgba(114,237,177,.16)}
