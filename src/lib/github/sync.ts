@@ -2,9 +2,9 @@ import { prisma } from '@/lib/db/prisma';
 import { getGitHubAppConfig } from './config';
 import { listInstallationRepositories } from './auth';
 
-export async function syncGitHubInstallationRepositories() {
+export async function syncGitHubInstallationRepositories(installationId: string) {
   const config = getGitHubAppConfig();
-  const installation = await listInstallationRepositories();
+  const installation = await listInstallationRepositories(installationId);
   const synced = [];
   for (const repo of installation.repositories) {
     const numericExternalId = String(repo.id);
@@ -41,6 +41,6 @@ export async function syncGitHubInstallationRepositories() {
     }
     synced.push(record);
   }
-  await prisma.auditEvent.create({ data: { eventType: 'github.installation.synced', actorType: 'SYSTEM', actorId: config.appSlug, payload: { installationId: config.installationId, repositorySelection: installation.repositorySelection ?? null, repositoryCount: synced.length, repositories: synced.map((repo) => ({ id: repo.id, externalId: repo.externalId, fullName: `${repo.owner}/${repo.name}`, defaultBranch: repo.defaultBranch })), tokenExpiresAt: installation.expiresAt, result: 'success' } } });
+  await prisma.auditEvent.create({ data: { eventType: 'github.installation.synced', actorType: 'SYSTEM', actorId: config.appSlug, payload: { installationId, repositorySelection: installation.repositorySelection ?? null, repositoryCount: synced.length, repositories: synced.map((repo) => ({ id: repo.id, externalId: repo.externalId, fullName: `${repo.owner}/${repo.name}`, defaultBranch: repo.defaultBranch })), tokenExpiresAt: installation.expiresAt, result: 'success' } } });
   return { repositories: synced, expiresAt: installation.expiresAt, repositorySelection: installation.repositorySelection };
 }
