@@ -13,7 +13,19 @@ export default function MarketingHome() {
       <div className="marketing-grid" aria-hidden="true" />
       <header className="marketing-nav">
         <a className="marketing-brand" href="/">
-          <span>G</span><strong>GitAgent</strong>
+          <span className="gitagent-mascot" aria-hidden="true">
+            <svg viewBox="0 0 64 64" role="img">
+              <circle cx="32" cy="32" r="30" fill="#07110d" stroke="currentColor" strokeWidth="2"/>
+              <path d="M18 19 14 8l12 7c4-2 8-2 12 0l12-7-4 13c3 4 4 8 3 13-1 8-7 13-17 15-10-2-16-7-17-15-1-6 0-11 3-15Z" fill="#f7faf8"/>
+              <path d="M19 27c4 0 7 2 9 6-5 1-9-1-11-5Zm26 0c-4 0-7 2-9 6 5 1 9-1 11-5Z" fill="#07110d"/>
+              <circle cx="24" cy="29" r="1.6" fill="#72edb1"/><circle cx="40" cy="29" r="1.6" fill="#72edb1"/>
+              <path d="m29 36 3 2 3-2-3-1Z" fill="#07110d"/><path d="M28 40c3 3 5 3 8 0" fill="none" stroke="#07110d" strokeWidth="1.7" strokeLinecap="round"/>
+              <path d="M26 48 22 57h20l-4-9m-9 0v9m6-9v9m-6-5h6" fill="none" stroke="#f7faf8" strokeWidth="2" strokeLinecap="round"/>
+              <circle cx="32" cy="52" r="3" fill="#07110d" stroke="#72edb1" strokeWidth="1.5"/>
+              <circle cx="49" cy="24" r="6" fill="#07110d" stroke="#f7faf8" strokeWidth="2"/><circle cx="49" cy="24" r="2" fill="#72edb1"/>
+              <path d="m51 18 3-9" stroke="#f7faf8" strokeWidth="2" strokeLinecap="round"/><circle cx="54" cy="8" r="2" fill="#f7faf8"/>
+            </svg>
+          </span><strong>GitAgent</strong>
         </a>
         <nav>
           <a href="#workflow">Workflow</a>
