@@ -424,3 +424,25 @@ textarea { resize: vertical; }
 .ga2-primary,.ga2-secondary,.ga2-account{transition:transform .2s ease,filter .2s ease}.ga2-primary:hover,.ga2-secondary:hover,.ga2-account:hover{transform:translateY(-2px);filter:brightness(1.04)}
 @media(max-width:1100px){.ga2-nav nav{gap:20px}.ga2-hero{grid-template-columns:1fr;padding-top:70px}.ga2-stage{min-height:650px;margin-top:35px}.ga2-console{width:94%;left:3%}}
 @media(max-width:720px){.ga2-nav{height:86px;padding:0 20px}.ga2-brand img{width:54px;height:54px}.ga2-brand strong{font-size:22px}.ga2-nav nav>a:not(.ga2-account){display:none}.ga2-account{padding:11px 18px}.ga2-hero{padding:62px 22px 40px}.ga2-copy h1{font-size:clamp(50px,14vw,70px)}.ga2-lede{font-size:16px}.ga2-actions{flex-direction:column}.ga2-primary,.ga2-secondary{width:100%}.ga2-proof{flex-direction:column;gap:10px}.ga2-stage{min-height:470px}.ga2-ghost{width:220px;height:220px;right:0;top:-25px}.ga2-console{top:100px;transform:rotateZ(1deg);animation:none}.ga2-consolebody{grid-template-columns:1fr}.ga2-consolebody aside{display:none}.ga2-work{padding:14px}.ga2-flow{display:none}.ga2-evidence{top:80px}.ga2-consolebar{grid-template-columns:1fr 1fr}.ga2-consolebar i{display:none}}
+
+/* Reference reconstruction — measured from approved 1456×992 composition */
+@media(min-width:1101px){
+.ga2{background:radial-gradient(ellipse at 79% 44%,rgba(0,135,78,.18) 0,rgba(0,70,45,.07) 34%,transparent 55%),#011b12}
+.ga2-grid{height:992px;background-size:74px 74px;background-image:linear-gradient(rgba(25,133,85,.13) 1px,transparent 1px),linear-gradient(90deg,rgba(25,133,85,.13) 1px,transparent 1px)}
+.ga2-nav{height:118px;padding:0 4.3%;background:linear-gradient(90deg,rgba(2,25,17,.98),rgba(3,35,23,.94));box-shadow:0 0 28px rgba(0,205,119,.06)}
+.ga2-brand{gap:18px}.ga2-brand img{width:84px;height:84px}.ga2-brand strong{font-size:35px}
+.ga2-nav nav{gap:43px}.ga2-account{padding:15px 31px;font-size:14px;background:linear-gradient(90deg,#5ce79f,#69e99c);box-shadow:0 0 26px rgba(57,230,143,.16)}
+.ga2-hero{min-height:874px;padding:105px 4.3% 58px;grid-template-columns:44.5% 55.5%;align-items:start}
+.ga2-kicker{margin:35px 0 48px;font-size:13px}
+.ga2-copy h1{font-size:clamp(70px,5.7vw,94px);line-height:.955;max-width:690px}
+.ga2-copy h1 em{color:#4de5a1}.ga2-lede{font-size:19px;line-height:1.62;max-width:610px;margin-top:31px}
+.ga2-actions{margin-top:38px;gap:18px}.ga2-primary{width:322px;height:72px;padding:0 24px;font-size:20px;border-radius:8px;background:linear-gradient(90deg,#5ce7a0,#75ee9f);box-shadow:0 15px 40px rgba(25,220,127,.13)}.ga2-gh{width:37px;height:37px}.ga2-primary b{font-size:23px}.ga2-secondary{width:214px;height:72px;font-size:17px;border-color:#23805a}
+.ga2-proof{margin-top:32px;gap:34px;font-size:13px}.ga2-proof span{gap:9px}.ga2-proof span i{width:29px;height:29px;display:grid;place-items:center;border-radius:50%;background:rgba(0,143,86,.23);color:#4de5a1;font-style:normal;font-weight:900;box-shadow:0 0 17px rgba(25,222,130,.08)}
+.ga2-stage{min-height:700px;margin-top:0;perspective:1450px}
+.ga2-network{position:absolute;inset:-110px -80px -70px -20px;background:radial-gradient(circle at 64% 29%,rgba(0,236,137,.12),transparent 25%);z-index:0;overflow:visible}.ga2-network svg{position:absolute;inset:0;width:100%;height:100%;overflow:visible}.ga2-network path{fill:none;stroke:rgba(33,212,128,.35);stroke-width:1.3}.ga2-network circle{fill:#14cf7d;filter:drop-shadow(0 0 8px rgba(26,239,139,.85))}
+.ga2-ghost{position:absolute;width:390px;height:390px;right:8%;top:-108px;border:1px solid rgba(39,208,127,.30);border-radius:50%;z-index:1;display:grid;place-items:center;background:radial-gradient(circle,rgba(22,190,112,.12),rgba(2,26,18,.20) 60%,transparent 70%);box-shadow:0 0 45px rgba(19,212,121,.06);overflow:hidden;opacity:1;mix-blend-mode:normal}
+.ga2-ghost img{width:118%;height:118%;object-fit:cover;border-radius:50%;opacity:.72;filter:sepia(1) saturate(2.25) hue-rotate(83deg) brightness(1.7) contrast(.92);mix-blend-mode:screen}
+.ga2-console{width:112%;left:-8%;top:155px;border-color:#39e99a;border-radius:22px;background:linear-gradient(145deg,#05251a,#021a12);box-shadow:0 46px 95px rgba(0,0,0,.54),0 0 24px rgba(45,238,147,.26),inset 0 0 34px rgba(31,184,111,.025);transform:rotateZ(5.1deg) rotateY(-2.2deg);animation:ga-ref-float 7s ease-in-out infinite}
+@keyframes ga-ref-float{0%,100%{transform:translateY(0) rotateZ(5.1deg) rotateY(-2.2deg)}50%{transform:translateY(-11px) rotateZ(4.4deg) rotateY(-1.4deg)}}
+.ga2-consolebar{height:65px;padding:0 25px}.ga2-consolebody{grid-template-columns:162px 1fr;min-height:470px}.ga2-consolebody aside{padding:20px 13px}.ga2-consolebody aside img{width:62px;height:62px}.ga2-work{padding:25px 23px}.ga2-boundary{height:86px}.ga2-flow{height:61px}.ga2-code{padding:17px}.ga2-code code{font-size:12.5px}.ga2-review{padding:17px;margin-top:15px}.ga2-review button{padding:14px 24px;font-size:14px;background:#51e59e}.ga2-evidence{right:-1%;top:178px;padding:12px 19px;border-color:#2bc682;box-shadow:0 0 20px rgba(26,217,128,.08)}
+}
