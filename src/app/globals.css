@@ -598,3 +598,35 @@ textarea { resize: vertical; }
   .ga2 .ga2-primary,.ga2 .ga2-secondary{width:100%!important}
   .ga2 .ga2-stage .ga2-ghost{width:260px!important;height:260px!important;right:-4%!important;top:-40px!important}
 }
+
+
+/* Scale correction: compact actions; no raster mascot enlargement */
+.ga2 .ga2-primary{
+  width:218px!important;
+  height:50px!important;
+  padding:0 15px!important;
+  gap:9px!important;
+  font-size:14px!important;
+  border-radius:6px!important;
+}
+.ga2 .ga2-primary .ga2-gh{width:26px!important;height:26px!important}
+.ga2 .ga2-primary b{font-size:17px!important}
+.ga2 .ga2-secondary{
+  width:174px!important;
+  height:50px!important;
+  font-size:14px!important;
+  border-radius:6px!important;
+}
+.ga2 .ga2-account{
+  padding:10px 20px!important;
+  font-size:13px!important;
+}
+.ga2 .ga2-stage .ga2-ghost{
+  width:330px!important;
+  height:330px!important;
+  right:9%!important;
+  top:-54px!important;
+  opacity:.24!important;
+  image-rendering:auto!important;
+  filter:sepia(1) saturate(1.75) hue-rotate(82deg) brightness(1.12) contrast(1.02) drop-shadow(0 0 24px rgba(55,205,139,.12))!important;
+}
