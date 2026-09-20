@@ -27,8 +27,9 @@ export default function NewTaskPage() {
   useEffect(() => {
     fetch('/api/tasks')
       .then(async (response) => {
-        if (!response.ok) throw new Error('Failed to load task options');
-        setBootstrap(await response.json());
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(body.error ?? 'Failed to load task options');
+        setBootstrap(body);
       })
       .catch((error) => setError(error.message));
   }, []);
@@ -51,7 +52,6 @@ export default function NewTaskPage() {
           goal: form.get('goal'),
           repositoryId: form.get('repositoryId'),
           agentId: form.get('agentId'),
-          initiatorId: form.get('initiatorId'),
           maxCostUsd: Number(form.get('maxCostUsd') || 1),
           maxTokens: Number(form.get('maxTokens') || 20000),
           requiresHumanApproval: form.get('requiresHumanApproval') === 'on',
@@ -81,7 +81,7 @@ export default function NewTaskPage() {
         runBody = runText ? JSON.parse(runText) : {};
       } catch {
         throw new Error(
-          `Agent execution returned an invalid or empty response (HTTP ${runResponse.status}). Check the Next.js terminal for the server-side error.`,
+          `Agent execution returned an invalid or empty response (HTTP ${runResponse.status}). Check the server-side logs for the error.`,
         );
       }
       if (!runResponse.ok) throw new Error(runBody.error ?? `Agent execution failed (HTTP ${runResponse.status})`);
@@ -97,6 +97,8 @@ export default function NewTaskPage() {
       setLoading(false);
     }
   }
+
+  const signedInUser = bootstrap.users[0];
 
   return (
     <ControlPlaneShell active="/tasks/new" title="Start governed coding task" subtitle="repository agent">
@@ -135,8 +137,10 @@ export default function NewTaskPage() {
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12 }}>
             <label>
               <span className="label">Repository</span>
-              <select name="repositoryId" required style={{ width: '100%', marginTop: 6 }}>
-                {bootstrap.repositories.map((repo) => (
+              <select name="repositoryId" required style={{ width: '100%', marginTop: 6 }} disabled={bootstrap.repositories.length === 0}>
+                {bootstrap.repositories.length === 0 ? (
+                  <option value="">No connected repositories</option>
+                ) : bootstrap.repositories.map((repo) => (
                   <option key={repo.id} value={repo.id}>
                     {repo.owner ? `${repo.owner} / ` : ''}{repo.name}
                   </option>
@@ -153,11 +157,11 @@ export default function NewTaskPage() {
             </label>
             <label>
               <span className="label">Human sponsor</span>
-              <select name="initiatorId" required style={{ width: '100%', marginTop: 6 }}>
-                {bootstrap.users.map((user) => (
-                  <option key={user.id} value={user.id}>{user.name ?? user.email}</option>
-                ))}
-              </select>
+              <input
+                readOnly
+                value={signedInUser?.name ?? signedInUser?.email ?? 'Signed-in user'}
+                style={{ width: '100%', marginTop: 6 }}
+              />
             </label>
           </div>
 
@@ -187,11 +191,14 @@ export default function NewTaskPage() {
           </label>
 
           <div>
-            <button className="solid-button" disabled={loading} type="submit">
+            <button className="solid-button" disabled={loading || bootstrap.repositories.length === 0} type="submit">
               {loading ? 'GitAgent is inspecting the repository…' : 'Start GitAgent'}
             </button>
           </div>
 
+          {bootstrap.repositories.length === 0 && !error ? (
+            <p className="muted" style={{ margin: 0 }}>Connect and sync at least one GitHub repository before starting a task.</p>
+          ) : null}
           {error && <p style={{ color: 'var(--danger)' }}>{error}</p>}
           {result && (
             <div style={{ borderTop: '1px solid var(--border)', paddingTop: 16, display: 'grid', gap: 8 }}>
