@@ -37,17 +37,46 @@ function jwt() {
 
 export function isReviewAppConfigured() {
   const c = reviewConfig();
-  return Boolean(c.appId && c.installationId && (c.privateKey || c.privateKeyPath));
+  return Boolean(c.appId && (c.privateKey || c.privateKeyPath));
 }
 
-export async function createReviewInstallationToken() {
+async function discoverReviewInstallationId(owner: string, repo: string) {
+  const response = await fetch(`${GITHUB_API}/repos/${owner}/${repo}/installation`, {
+    method: 'GET',
+    cache: 'no-store',
+    headers: {
+      Accept: 'application/vnd.github+json',
+      Authorization: `Bearer ${jwt()}`,
+      'X-GitHub-Api-Version': API_VERSION,
+      'User-Agent': 'GitAgent-Review',
+    },
+  });
+
+  if (!response.ok) {
+    if (response.status === 404) {
+      throw new Error(`GitAgent-Review is not installed on ${owner}/${repo}. Install the review app on this repository before requesting human merge approval.`);
+    }
+    throw new Error(`GitHub Review App installation lookup failed (${response.status}).`);
+  }
+
+  const result = await response.json() as { id: number };
+  return String(result.id);
+}
+
+export async function createReviewInstallationToken(owner?: string, repo?: string) {
   const config = reviewConfig();
   if (!isReviewAppConfigured()) throw new Error('GitHub Review App is not fully configured.');
-  const response = await fetch(`${GITHUB_API}/app/installations/${config.installationId}/access_tokens`, {
+
+  const installationId = config.installationId || (owner && repo ? await discoverReviewInstallationId(owner, repo) : '');
+  if (!installationId) {
+    throw new Error('GitHub Review App installation is not configured for this repository.');
+  }
+
+  const response = await fetch(`${GITHUB_API}/app/installations/${installationId}/access_tokens`, {
     method: 'POST', cache: 'no-store',
     headers: { Accept: 'application/vnd.github+json', Authorization: `Bearer ${jwt()}`, 'X-GitHub-Api-Version': API_VERSION, 'User-Agent': 'GitAgent-Review' },
   });
   if (!response.ok) throw new Error(`GitHub Review App API ${response.status}: ${(await response.text()).slice(0, 500)}`);
   const result = await response.json() as { token: string; expires_at: string };
-  return { ...result, appSlug: config.appSlug, installationId: config.installationId };
+  return { ...result, appSlug: config.appSlug, installationId };
 }
