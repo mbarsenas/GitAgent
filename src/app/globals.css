@@ -389,3 +389,7 @@ textarea { resize: vertical; }
 .auth-github { display:grid;grid-template-columns:38px 1fr auto!important; }
 .auth-github strong,.auth-google strong { text-align:left; }
 .provider-mark { width:28px;height:28px;display:grid;place-items:center;border:1px solid currentColor;border-radius:50%;font:700 10px/1 ui-monospace,monospace; }
+
+.provider-logo { width:28px;height:28px;display:block; }
+.github-logo { color:#0b1510; }
+.google-logo { width:27px;height:27px; }
