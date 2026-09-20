@@ -562,3 +562,39 @@ textarea { resize: vertical; }
   filter:brightness(1.02);
   box-shadow:0 11px 28px rgba(47,204,137,.14);
 }
+
+
+/* Hard overrides for CTA sizing + hero mascot scale */
+.ga2 .ga2-primary{
+  min-width:0!important;
+  width:270px!important;
+  height:58px!important;
+  padding:0 20px!important;
+  gap:12px!important;
+  font-size:16px!important;
+}
+.ga2 .ga2-primary .ga2-gh{width:31px!important;height:31px!important}
+.ga2 .ga2-primary b{font-size:20px!important}
+.ga2 .ga2-secondary{
+  min-width:0!important;
+  width:205px!important;
+  height:58px!important;
+  font-size:16px!important;
+}
+.ga2 .ga2-account{
+  min-width:0!important;
+  width:auto!important;
+  padding:12px 24px!important;
+  font-size:14px!important;
+}
+.ga2 .ga2-stage .ga2-ghost{
+  width:520px!important;
+  height:520px!important;
+  right:-2%!important;
+  top:-150px!important;
+  opacity:.34!important;
+}
+@media(max-width:720px){
+  .ga2 .ga2-primary,.ga2 .ga2-secondary{width:100%!important}
+  .ga2 .ga2-stage .ga2-ghost{width:260px!important;height:260px!important;right:-4%!important;top:-40px!important}
+}
