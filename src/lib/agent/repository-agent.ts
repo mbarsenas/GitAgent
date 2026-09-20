@@ -127,7 +127,7 @@ async function findIndependentReviewer(implementationAgentId: string, repository
 export async function runRepositoryAgent(executionId: string) {
   const execution = await prisma.execution.findUnique({
     where: { id: executionId },
-    include: { task: { include: { repository: true, approvals: true } }, agent: true, workspace: true },
+    include: { task: { include: { repository: { include: { user: true } }, approvals: true } }, agent: true, workspace: true },
   });
   if (!execution) throw new Error('Execution not found.');
 
@@ -135,6 +135,7 @@ export async function runRepositoryAgent(executionId: string) {
   const repo = task.repository;
   const fullName = `${repo.owner}/${repo.name}`;
   if (task.agentId !== agent.id) throw new Error('Execution agent is not assigned to this task.');
+  if (!repo.user?.githubInstallationId) throw new Error('Repository owner does not have a GitHub App installation connected.');
 
   const trust = await getAgentTrustState(agent.id);
   if (trust === 'QUARANTINED') throw new Error('Policy denied execution: agent is QUARANTINED.');
@@ -166,7 +167,7 @@ export async function runRepositoryAgent(executionId: string) {
   });
 
   const readGrant = await requireGrant(agent.id, 'repo.read', repo.id, fullName, task.id, execution.id);
-  const installation = await createInstallationToken();
+  const installation = await createInstallationToken(repo.user.githubInstallationId);
   const tree = await github<{ tree: RepoFile[] }>(
     `${API}/repos/${repo.owner}/${repo.name}/git/trees/${encodeURIComponent(repo.defaultBranch)}?recursive=1`,
     installation.token,
@@ -415,103 +416,27 @@ export async function runRepositoryAgent(executionId: string) {
         },
       },
     });
-    return {
-      executionId,
-      repository: fullName,
-      branch: branch.branch,
-      plan: { ...plan, proposedChanges },
-      validation,
-      repairAttempts,
-      status: 'FAILED' as const,
-      blocked: true,
-      reasonCode: 'agent.validation_failed_after_repair',
-    };
+    throw new Error('Implementation validation failed after repair attempts.');
   }
-
-  const writeGrant = await requireGrant(agent.id, 'branch.write', repo.id, fullName, task.id, execution.id);
-
-  for (const change of proposedChanges) {
-    const current = await github<{ sha: string }>(
-      `${API}/repos/${repo.owner}/${repo.name}/contents/${encodeURIComponent(change.path)}?ref=${encodeURIComponent(branch.branch)}`,
-      installation.token,
-    );
-    await github(`${API}/repos/${repo.owner}/${repo.name}/contents/${encodeURIComponent(change.path)}`, installation.token, {
-      method: 'PUT',
-      body: JSON.stringify({
-        message: change.message,
-        content: Buffer.from(change.content).toString('base64'),
-        sha: current.sha,
-        branch: branch.branch,
-      }),
-    });
-  }
-
-  await prisma.auditEvent.create({
-    data: {
-      taskId: task.id,
-      executionId,
-      eventType: 'agent.changes.applied',
-      actorType: 'agent',
-      actorId: agent.id,
-      payload: {
-        branch: branch.branch,
-        capabilityGrantId: writeGrant.id,
-        files: proposedChanges.map((change) => change.path),
-        validationPassed: true,
-        repairAttempts,
-        policyVersion: POLICY_VERSION,
-      },
-    },
-  });
 
   const change = await createGovernedChange(executionId, branch.branch);
   const reviewer = await findIndependentReviewer(agent.id, repo.id, fullName);
-  let review = null;
-  let approval = null;
-
-  if (reviewer) {
-    review = await performPullRequestReview(executionId, change.pullRequestNumber, reviewer.id, 'REVIEW');
-    if (review.allowed) {
-      approval = await performPullRequestReview(executionId, change.pullRequestNumber, reviewer.id, 'APPROVE');
-    }
-  } else {
-    await prisma.auditEvent.create({
-      data: {
-        taskId: task.id,
-        executionId,
-        eventType: 'agent.review.blocked',
-        actorType: 'system',
-        actorId: 'gitagent',
-        payload: {
-          repository: fullName,
-          pullRequestNumber: change.pullRequestNumber,
-          reasonCode: 'policy.independent_reviewer_not_found',
-          policyVersion: POLICY_VERSION,
-        },
-      },
-    });
+  if (!reviewer) {
+    await prisma.task.update({ where: { id: task.id }, data: { status: 'WAITING_APPROVAL' } });
+    return { executionId, repository: fullName, pullRequestNumber: change.pullRequestNumber, status: 'WAITING_APPROVAL' as const };
   }
 
-  if (approval?.allowed) {
-    await requestHumanMergeApproval(execution.id, change.pullRequestNumber);
+  const review = await performPullRequestReview(executionId, change.pullRequestNumber, reviewer.id, 'REVIEW');
+  if (review.allowed) {
+    await performPullRequestReview(executionId, change.pullRequestNumber, reviewer.id, 'APPROVE');
   }
-
+  await requestHumanMergeApproval(executionId, change.pullRequestNumber);
   await prisma.execution.update({ where: { id: execution.id }, data: { status: 'SUCCEEDED', finishedAt: new Date() } });
   await prisma.task.update({ where: { id: task.id }, data: { status: 'WAITING_APPROVAL' } });
-
   return {
     executionId,
     repository: fullName,
-    branch: branch.branch,
-    plan: { ...plan, proposedChanges },
-    validation,
-    repairAttempts,
     pullRequestNumber: change.pullRequestNumber,
-    pullRequestUrl: change.pullRequestUrl,
-    independentReviewer: reviewer ? { id: reviewer.id, name: reviewer.name } : null,
-    review,
-    approval,
     status: 'WAITING_APPROVAL' as const,
-    blocked: false,
   };
 }
