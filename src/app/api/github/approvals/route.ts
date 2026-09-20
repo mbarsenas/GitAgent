@@ -1,15 +1,16 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
+import { requireCurrentUser } from '@/lib/auth/current-user';
 
 export async function GET() {
   try {
-    const repository = await prisma.repository.findFirst({
-      where: { provider: 'github', externalId: '1373462743' },
-    });
-    if (!repository) throw new Error('Canonical repository missing.');
+    const session = await requireCurrentUser();
 
     const approvals = await prisma.approval.findMany({
-      where: { status: 'PENDING', task: { repositoryId: repository.id } },
+      where: {
+        status: 'PENDING',
+        task: { repository: { userId: session.userId } },
+      },
       orderBy: { requestedAt: 'asc' },
       include: { task: { include: { repository: true } } },
     });
@@ -59,9 +60,10 @@ export async function GET() {
       approvals: items,
     });
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
     return NextResponse.json(
-      { ok: false, error: error instanceof Error ? error.message : String(error) },
-      { status: 500 },
+      { ok: false, error: message },
+      { status: message === 'UNAUTHENTICATED' ? 401 : 500 },
     );
   }
 }
