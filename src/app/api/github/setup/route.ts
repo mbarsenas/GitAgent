@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { requireCurrentUser } from '@/lib/auth/current-user';
 import { prisma } from '@/lib/db/prisma';
 import { getGitHubAppConfig } from '@/lib/github/config';
+import { syncGitHubInstallationRepositories } from '@/lib/github/sync';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,7 +15,6 @@ export async function GET(request: NextRequest) {
       return NextResponse.redirect(new URL('/settings/github?error=github_app_not_configured', request.url));
     }
 
-    // GitHub redirects to the configured Setup URL with installation_id.
     const installationId = request.nextUrl.searchParams.get('installation_id');
     const setupAction = request.nextUrl.searchParams.get('setup_action');
 
@@ -39,6 +39,8 @@ export async function GET(request: NextRequest) {
       data: { githubInstallationId: installationId },
     });
 
+    const syncResult = await syncGitHubInstallationRepositories(session.userId, installationId);
+
     await prisma.auditEvent.create({
       data: {
         eventType: 'github.installation.linked',
@@ -48,6 +50,7 @@ export async function GET(request: NextRequest) {
           installationId,
           setupAction: setupAction ?? null,
           appSlug: config.appSlug,
+          repositoryCount: syncResult.repositories.length,
           result: 'success',
         },
       },
@@ -55,8 +58,10 @@ export async function GET(request: NextRequest) {
 
     const target = new URL('/settings/github', request.url);
     target.searchParams.set('linked', '1');
+    target.searchParams.set('synced', String(syncResult.repositories.length));
     return NextResponse.redirect(target);
-  } catch {
+  } catch (error) {
+    console.error('GET /api/github/setup failed', error);
     const signin = new URL('/signin', request.url);
     signin.searchParams.set('next', '/settings/github');
     return NextResponse.redirect(signin);
