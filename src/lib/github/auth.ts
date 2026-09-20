@@ -1,5 +1,5 @@
 import { createSign } from 'node:crypto';
-import { getGitHubAppConfig, getGitHubAppPrivateKey, isGitHubAppConfigured } from './config';
+import { getGitHubAppConfig, getGitHubAppPrivateKey } from './config';
 
 const GITHUB_API = 'https://api.github.com';
 const API_VERSION = '2022-11-28';
@@ -57,14 +57,10 @@ export type GitHubInstallationToken = {
   repository_selection?: string;
 };
 
-export async function createInstallationToken() {
-  const config = getGitHubAppConfig();
-  if (!isGitHubAppConfigured(config) || !config.installationId) {
-    throw new Error('GitHub App installation is not fully configured.');
-  }
-
+export async function createInstallationToken(installationId: string) {
+  if (!installationId) throw new Error('GitHub installation ID is required.');
   return githubFetch<GitHubInstallationToken>(
-    `${GITHUB_API}/app/installations/${config.installationId}/access_tokens`,
+    `${GITHUB_API}/app/installations/${installationId}/access_tokens`,
     createGitHubAppJwt(),
     { method: 'POST' },
   );
@@ -79,8 +75,8 @@ export type GitHubInstallationRepository = {
   owner: { login: string };
 };
 
-export async function listInstallationRepositories() {
-  const installation = await createInstallationToken();
+export async function listInstallationRepositories(installationId: string) {
+  const installation = await createInstallationToken(installationId);
   const result = await githubFetch<{
     total_count: number;
     repositories: GitHubInstallationRepository[];
@@ -93,9 +89,9 @@ export async function listInstallationRepositories() {
   };
 }
 
-export async function verifyGitHubInstallation() {
+export async function verifyGitHubInstallation(installationId: string) {
   try {
-    const result = await listInstallationRepositories();
+    const result = await listInstallationRepositories(installationId);
     return { ok: true as const, ...result };
   } catch (error) {
     return {
