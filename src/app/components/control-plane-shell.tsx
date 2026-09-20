@@ -33,7 +33,9 @@ export function ControlPlaneShell({
         <div className="repo-context">
           <span className="muted">control plane</span>
           <strong>{title}</strong>
-          {subtitle ? <span className="branch">{subtitle}</span> : null}
+          {subtitle ? (
+            <span className={`branch${subtitle.includes('CONNECTED') ? ' status-positive' : ''}`}>{subtitle}</span>
+          ) : null}
         </div>
         <div className="chrome-actions">
           <a className="ghost-button" href="/approvals">Approvals</a>
