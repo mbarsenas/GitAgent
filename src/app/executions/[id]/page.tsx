@@ -34,7 +34,7 @@ export default async function ExecutionDetailPage({ params }: PageProps) {
   const merged = events.find((event) => event.eventType === 'github.pr.merged');
 
   return (
-    <main className="main-panel">
+    <ControlPlaneShell active="/executions" title="Execution detail" subtitle={execution.id}>
       <div className="section-head">
         <div>
           <p className="kicker">Executions / {execution.id}</p>
@@ -98,6 +98,6 @@ export default async function ExecutionDetailPage({ params }: PageProps) {
           </div>
         </article>
       </section>
-    </main>
+    </ControlPlaneShell>
   );
 }
