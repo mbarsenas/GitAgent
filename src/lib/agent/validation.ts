@@ -1,12 +1,11 @@
-import { exec } from 'node:child_process';
 import { mkdtemp, rm, writeFile, mkdir } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { promisify } from 'node:util';
 import { prisma } from '@/lib/db/prisma';
 import { createInstallationToken } from '@/lib/github/auth';
 
-const execAsync = promisify(exec);
+const API = 'https://api.github.com';
+const VERSION = '2022-11-28';
 const MAX_OUTPUT = 20_000;
 
 type ValidationCommand = {
@@ -24,6 +23,13 @@ export type ValidationResult = {
     stdout: string;
     stderr: string;
   }>;
+};
+
+type TreeEntry = {
+  path: string;
+  type: 'blob' | 'tree';
+  sha: string;
+  size?: number;
 };
 
 function trimOutput(value: string) {
@@ -50,13 +56,93 @@ function detectCommands(files: Map<string, string>): { projectType: string; comm
   if (files.has('pyproject.toml') || files.has('requirements.txt')) {
     return {
       projectType: 'python',
-      commands: [
-        { label: 'test', command: 'python -m pytest -q' },
-      ],
+      commands: [{ label: 'test', command: 'python -m pytest -q' }],
     };
   }
 
   return { projectType: 'unknown', commands: [] };
+}
+
+async function github<T>(url: string, token: string) {
+  const response = await fetch(url, {
+    cache: 'no-store',
+    headers: {
+      Accept: 'application/vnd.github+json',
+      Authorization: `Bearer ${token}`,
+      'X-GitHub-Api-Version': VERSION,
+      'User-Agent': 'GitAgent-Control',
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`GitHub API ${response.status}: ${(await response.text()).slice(0, 500)}`);
+  }
+
+  return response.json() as Promise<T>;
+}
+
+async function downloadRepositorySnapshot(input: {
+  owner: string;
+  name: string;
+  branch: string;
+  token: string;
+  repoDir: string;
+}) {
+  const tree = await github<{ tree: TreeEntry[] }>(
+    `${API}/repos/${input.owner}/${input.name}/git/trees/${encodeURIComponent(input.branch)}?recursive=1`,
+    input.token,
+  );
+
+  const blobs = tree.tree.filter((entry) => entry.type === 'blob');
+  await Promise.all(
+    blobs.map(async (entry) => {
+      const blob = await github<{ content?: string; encoding?: string }>(
+        `${API}/repos/${input.owner}/${input.name}/git/blobs/${entry.sha}`,
+        input.token,
+      );
+
+      if (blob.encoding !== 'base64' || !blob.content) return;
+
+      const target = path.join(input.repoDir, entry.path);
+      await mkdir(path.dirname(target), { recursive: true });
+      await writeFile(target, Buffer.from(blob.content.replace(/\n/g, ''), 'base64'));
+    }),
+  );
+}
+
+async function runCommand(command: string, cwd: string) {
+  const { spawn } = await import('node:child_process');
+
+  return new Promise<{ stdout: string; stderr: string; exitCode: number }>((resolve) => {
+    const child = spawn(command, {
+      cwd,
+      env: { ...process.env, CI: '1' },
+      shell: true,
+    });
+
+    let stdout = '';
+    let stderr = '';
+    const timer = setTimeout(() => {
+      child.kill('SIGKILL');
+    }, 180_000);
+
+    child.stdout.on('data', (chunk) => {
+      stdout += String(chunk);
+      if (stdout.length > MAX_OUTPUT * 2) stdout = stdout.slice(-MAX_OUTPUT * 2);
+    });
+    child.stderr.on('data', (chunk) => {
+      stderr += String(chunk);
+      if (stderr.length > MAX_OUTPUT * 2) stderr = stderr.slice(-MAX_OUTPUT * 2);
+    });
+    child.on('error', (error) => {
+      clearTimeout(timer);
+      resolve({ stdout: trimOutput(stdout), stderr: trimOutput(stderr || error.message), exitCode: 1 });
+    });
+    child.on('close', (code) => {
+      clearTimeout(timer);
+      resolve({ stdout: trimOutput(stdout), stderr: trimOutput(stderr), exitCode: code ?? 1 });
+    });
+  });
 }
 
 export async function validateRepositorySnapshot(input: {
@@ -79,15 +165,18 @@ export async function validateRepositorySnapshot(input: {
     throw new Error('GitHub installation is not linked to the repository owner.');
   }
 
-  const token = await createInstallationToken(installationId);
+  const installation = await createInstallationToken(installationId);
   const tempRoot = await mkdtemp(path.join(os.tmpdir(), 'gitagent-'));
   const repoDir = path.join(tempRoot, 'repo');
 
   try {
-    const cloneUrl = `https://x-access-token:${token.token}@github.com/${input.owner}/${input.name}.git`;
-    await execAsync(`git clone --depth 1 --branch ${input.branch} "${cloneUrl}" "${repoDir}"`, {
-      timeout: 120_000,
-      maxBuffer: 5 * 1024 * 1024,
+    await mkdir(repoDir, { recursive: true });
+    await downloadRepositorySnapshot({
+      owner: input.owner,
+      name: input.name,
+      branch: input.branch,
+      token: installation.token,
+      repoDir,
     });
 
     for (const file of input.files) {
@@ -119,25 +208,15 @@ export async function validateRepositorySnapshot(input: {
 
     const results: ValidationResult['commands'] = [];
     for (const item of detected.commands) {
-      try {
-        const { stdout, stderr } = await execAsync(item.command, {
-          cwd: repoDir,
-          timeout: 180_000,
-          maxBuffer: 10 * 1024 * 1024,
-          env: { ...process.env, CI: '1' },
-        });
-        results.push({ label: item.label, command: item.command, exitCode: 0, stdout: trimOutput(stdout), stderr: trimOutput(stderr) });
-      } catch (error) {
-        const failure = error as { code?: number; stdout?: string; stderr?: string; message?: string };
-        results.push({
-          label: item.label,
-          command: item.command,
-          exitCode: typeof failure.code === 'number' ? failure.code : 1,
-          stdout: trimOutput(failure.stdout ?? ''),
-          stderr: trimOutput(failure.stderr ?? failure.message ?? ''),
-        });
-        break;
-      }
+      const result = await runCommand(item.command, repoDir);
+      results.push({
+        label: item.label,
+        command: item.command,
+        exitCode: result.exitCode,
+        stdout: result.stdout,
+        stderr: result.stderr,
+      });
+      if (result.exitCode !== 0) break;
     }
 
     return {
