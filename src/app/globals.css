@@ -132,9 +132,19 @@ h2 { margin: 4px 0 0; font-family: ui-sans-serif, system-ui, sans-serif; font-si
 .severity { padding: 3px 5px; border: 1px solid var(--border); font-size: 8px; }
 .severity.info { color: #9ed8bd; }
 
-.panel > div[style*="fontSize: 12"] { font-size: 10px !important; line-height: 1.6 !important; }
-.panel > div[style*="fontSize: 12"] strong { font-size: 10px !important; font-weight: 600 !important; }
-.panel p { font-weight: 400; }
+/* Shared control-plane body typography */
+.main-panel .panel p,
+.main-panel .panel li,
+.main-panel .panel td,
+.main-panel .panel th,
+.main-panel .panel label,
+.main-panel .panel .github-boundary-copy,
+.main-panel .panel .github-boundary-copy p { font-size: 10px; line-height: 1.55; font-weight: 400; }
+.main-panel .panel p strong,
+.main-panel .panel li strong,
+.main-panel .panel .github-boundary-copy strong { font-size: inherit; line-height: inherit; font-weight: 600; }
+.main-panel .panel > div[style*="fontSize: 12"] { font-size: 10px !important; line-height: 1.55 !important; }
+.main-panel .panel > div[style*="fontSize: 12"] strong { font-size: inherit !important; font-weight: 600 !important; }
 
 /* Shared auth branding */
 .auth-page{min-height:100vh;background:radial-gradient(circle at 50% 22%,rgba(80,220,151,.11),transparent 32%),#061710;color:#eef9f2;display:flex;flex-direction:column;align-items:center;font-family:ui-sans-serif,system-ui,sans-serif;padding:44px 20px}
