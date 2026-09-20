@@ -455,3 +455,55 @@ textarea { resize: vertical; }
 .ga2-primary:hover,.ga2-account:hover{transform:translateY(-2px);filter:brightness(1.04);box-shadow:0 13px 35px rgba(78,245,157,.22)}
 .ga2-secondary{transition:border-color .2s ease,background .2s ease,transform .2s ease}
 .ga2-secondary:hover{transform:translateY(-2px);border-color:#4cd995;background:rgba(10,57,39,.65)}
+
+
+/* Match the approved GitAgentFlow reference more closely */
+.ga2{
+  background:
+    radial-gradient(circle at 82% 28%,rgba(17,126,79,.14),transparent 31%),
+    radial-gradient(circle at 48% 70%,rgba(10,88,57,.08),transparent 38%),
+    #02170f;
+}
+.ga2-grid{
+  background-image:
+    linear-gradient(rgba(45,148,99,.075) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(45,148,99,.075) 1px,transparent 1px);
+  background-size:76px 76px;
+}
+.ga2-nav{
+  height:110px;
+  background:rgba(2,22,15,.78);
+  border-bottom-color:rgba(68,188,125,.14);
+}
+.ga2-brand img{width:68px;height:68px}
+.ga2-brand strong{font-size:30px}
+.ga2-nav nav{gap:38px;font-size:15px}
+.ga2-account{
+  padding:14px 27px;
+  font-size:14px;
+  min-width:0;
+  box-shadow:0 0 24px rgba(117,255,92,.11);
+}
+.ga2-hero{padding-top:82px}
+.ga2-copy h1{color:#f1f8f4}
+.ga2-copy h1 em{color:#60eaa6}
+.ga2-lede{color:#b7cbc1}
+.ga2-primary{
+  background:linear-gradient(90deg,#68e9a8,#83f3a1);
+  box-shadow:0 14px 36px rgba(35,225,133,.09);
+}
+.ga2-ghost{opacity:.17}
+.ga2-console{
+  border-color:#25bd77;
+  background:linear-gradient(145deg,rgba(5,32,23,.985),rgba(2,19,14,.99));
+  box-shadow:0 32px 72px rgba(0,0,0,.5),0 0 36px rgba(33,235,137,.055);
+}
+.ga2-evidence{background:rgba(5,40,27,.94)}
+@media(min-width:1101px){
+  .ga2-account{padding:14px 28px!important;font-size:14px!important}
+  .ga2-console{transform:rotateZ(1.65deg) rotateY(-.8deg)}
+  @keyframes ga2float-polished{
+    0%,100%{transform:translateY(0) rotateZ(1.65deg) rotateY(-.8deg)}
+    50%{transform:translateY(-7px) rotateZ(1.2deg) rotateY(-.4deg)}
+  }
+}
