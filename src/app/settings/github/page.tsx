@@ -29,6 +29,43 @@ const failureStyle = {
   color: '#e1b9bc',
 };
 
+async function verifyReviewApp(owner: string, name: string) {
+  const appId = process.env.GITHUB_REVIEW_APP_ID;
+  const privateKey = process.env.GITHUB_REVIEW_APP_PRIVATE_KEY;
+  if (!appId || !privateKey) return { ok: false as const, error: 'Review app is not configured in GitAgent.' };
+
+  try {
+    const { createSign } = await import('node:crypto');
+    const now = Math.floor(Date.now() / 1000);
+    const base64url = (value: string | Buffer) => Buffer.from(value).toString('base64url');
+    const header = base64url(JSON.stringify({ alg: 'RS256', typ: 'JWT' }));
+    const payload = base64url(JSON.stringify({ iat: now - 60, exp: now + 9 * 60, iss: appId }));
+    const unsigned = `${header}.${payload}`;
+    const signer = createSign('RSA-SHA256');
+    signer.update(unsigned);
+    signer.end();
+    const jwt = `${unsigned}.${signer.sign(privateKey.replace(/\\n/g, '\n')).toString('base64url')}`;
+
+    const response = await fetch(`https://api.github.com/repos/${owner}/${name}/installation`, {
+      cache: 'no-store',
+      headers: {
+        Accept: 'application/vnd.github+json',
+        Authorization: `Bearer ${jwt}`,
+        'X-GitHub-Api-Version': '2022-11-28',
+        'User-Agent': 'GitAgent-Review',
+      },
+    });
+
+    if (response.status === 404) return { ok: false as const, error: 'GitAgent-Review is not installed for this repository.' };
+    if (!response.ok) return { ok: false as const, error: `GitHub returned ${response.status} while checking the review app.` };
+
+    const installation = await response.json() as { id: number };
+    return { ok: true as const, installationId: String(installation.id) };
+  } catch (error) {
+    return { ok: false as const, error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
 export default async function GitHubConnectionPage() {
   let session;
   try {
@@ -57,6 +94,16 @@ export default async function GitHubConnectionPage() {
   const connected = verification?.ok === true;
   const discoveredRepositories = verification?.ok ? verification.repositories : [];
   const statusText = connected ? '✓ CONNECTED' : configured ? 'AUTH FAILED' : 'NOT CONNECTED';
+
+  const reviewSlug = process.env.GITHUB_REVIEW_APP_SLUG ?? 'gitagent-review';
+  const reviewChecks = connected
+    ? await Promise.all(discoveredRepositories.map(async (repo) => ({
+        repo,
+        review: await verifyReviewApp(repo.owner.login, repo.name),
+      })))
+    : [];
+  const reviewConnectedCount = reviewChecks.filter((item) => item.review.ok).length;
+  const reviewReady = connected && discoveredRepositories.length > 0 && reviewConnectedCount === discoveredRepositories.length;
 
   return (
     <ControlPlaneShell active="/settings/github" title="GitHub App connection" subtitle={statusText}>
@@ -101,12 +148,55 @@ export default async function GitHubConnectionPage() {
 
             {!connected && (
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                <a className="solid-button" href={`https://github.com/apps/${config.appSlug}/installations/new`} target="_blank" rel="noreferrer">
+                <a className="solid-button" href={`https://github.com/apps/${config.appSlug}/installations/new`}>
                   Install / Update GitAgent on GitHub
                 </a>
                 <a className="ghost-button" href="https://github.com/settings/installations" target="_blank" rel="noreferrer">
                   Manage GitHub App installations
                 </a>
+              </div>
+            )}
+          </div>
+        </section>
+
+        <section className="panel" style={{ marginBottom: 12 }}>
+          <div className="panel-head">
+            <div>
+              <span className="panel-label">INDEPENDENT REVIEW</span>
+              <h2>Enable GitAgent-Review</h2>
+            </div>
+            <span className="counter" style={reviewReady ? successStyle : failureStyle}>
+              {reviewReady ? '✓ READY' : 'ACTION REQUIRED'}
+            </span>
+          </div>
+          <div style={{ padding: 16, display: 'grid', gap: 12 }}>
+            <p style={{ margin: 0, color: 'var(--muted)', maxWidth: 920, lineHeight: 1.6 }}>
+              GitAgent-Review is a separate GitHub App identity used to review and approve pull requests created by the implementation agent. This prevents the implementation identity from approving its own work.
+            </p>
+
+            {connected && discoveredRepositories.length > 0 ? (
+              <div className="guardrail-list panel">
+                {reviewChecks.map(({ repo, review }) => (
+                  <div key={repo.id}>
+                    <span>{repo.full_name}</span>
+                    <strong style={review.ok ? { color: '#39ff14' } : { color: '#e1b9bc' }}>
+                      {review.ok ? `✓ Review app installed (${review.installationId})` : review.error}
+                    </strong>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="separation-rule">Connect GitAgent-Control first so GitAgent can verify review-app access for your repositories.</div>
+            )}
+
+            {!reviewReady && (
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                <a className="solid-button" href={`https://github.com/apps/${reviewSlug}/installations/new`}>
+                  Enable independent review
+                </a>
+                <span style={{ color: 'var(--muted)', fontSize: 10 }}>
+                  GitHub will ask which account and repositories GitAgent-Review may access.
+                </span>
               </div>
             )}
           </div>
