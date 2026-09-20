@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { requireCurrentUser } from '@/lib/auth/current-user';
 import {
   executeApprovedMerge,
   executeHumanApprovedMerge,
@@ -8,22 +9,23 @@ import {
 
 export async function POST(request: Request) {
   try {
+    const session = await requireCurrentUser();
     const body = await request.json();
-    const { approvalId, humanActorId, reason, decision, action } = body;
+    const { approvalId, reason, decision, action } = body;
 
     if (!approvalId) {
       return NextResponse.json({ ok: false, error: 'approvalId is required.' }, { status: 400 });
     }
 
     if (action === 'DECIDE') {
-      if (!humanActorId || (decision !== 'APPROVE' && decision !== 'REJECT')) {
+      if (decision !== 'APPROVE' && decision !== 'REJECT') {
         return NextResponse.json(
-          { ok: false, error: 'humanActorId and decision APPROVE|REJECT are required for DECIDE.' },
+          { ok: false, error: 'decision APPROVE|REJECT is required for DECIDE.' },
           { status: 400 },
         );
       }
 
-      const result = await recordHumanMergeDecision(approvalId, humanActorId, decision, reason);
+      const result = await recordHumanMergeDecision(approvalId, session.userId, decision, reason);
       return NextResponse.json({
         ok: true,
         phase: 'decision',
@@ -42,14 +44,7 @@ export async function POST(request: Request) {
       });
     }
 
-    if (!humanActorId) {
-      return NextResponse.json(
-        { ok: false, error: 'humanActorId is required when using the compatibility approve-and-execute flow.' },
-        { status: 400 },
-      );
-    }
-
-    const result = await executeHumanApprovedMerge(approvalId, humanActorId, reason);
+    const result = await executeHumanApprovedMerge(approvalId, session.userId, reason);
     return NextResponse.json({
       ok: true,
       phase: 'decision+execution',
@@ -76,11 +71,11 @@ export async function POST(request: Request) {
       {
         ok: false,
         error: message,
-        code: 'merge.internal_error',
+        code: message === 'UNAUTHENTICATED' ? 'auth.unauthenticated' : 'merge.internal_error',
         phase: 'merge-control',
         recoveryAware: true,
       },
-      { status: 500 },
+      { status: message === 'UNAUTHENTICATED' ? 401 : 500 },
     );
   }
 }
