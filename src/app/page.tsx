@@ -1,89 +1,20 @@
-const features = [
-  ['01', 'Isolated execution', 'Agents work inside execution-scoped branches and workspaces instead of receiving uncontrolled repository access.'],
-  ['02', 'Independent review', 'Implementation and review identities stay separate, preventing an agent from approving its own work.'],
-  ['03', 'Human merge gate', 'Sensitive transitions remain human decisions. AI can move work forward without owning the final merge.'],
-  ['04', 'AI policy builder', 'Describe the boundaries in plain English. GitAgent drafts an enforceable policy for human review.'],
-  ['05', 'Capability controls', 'Repository reads, branch writes, tests, pull requests, and protected actions are explicitly governed.'],
-  ['06', 'Audit evidence', 'Sponsorship, execution, denials, approvals, reviews, and policy changes are retained as evidence.'],
-];
-
-export default function MarketingHome() {
-  return (
-    <main className="marketing-site">
-      <div className="marketing-grid" aria-hidden="true" />
-      <header className="marketing-nav">
-        <a className="marketing-brand" href="/">
-          <span className="gitagent-mascot" aria-hidden="true">
-            <svg viewBox="0 0 64 64" role="img">
-              <circle cx="32" cy="32" r="30" fill="#07110d" stroke="currentColor" strokeWidth="2"/>
-              <path d="M18 19 14 8l12 7c4-2 8-2 12 0l12-7-4 13c3 4 4 8 3 13-1 8-7 13-17 15-10-2-16-7-17-15-1-6 0-11 3-15Z" fill="#f7faf8"/>
-              <path d="M19 27c4 0 7 2 9 6-5 1-9-1-11-5Zm26 0c-4 0-7 2-9 6 5 1 9-1 11-5Z" fill="#07110d"/>
-              <circle cx="24" cy="29" r="1.6" fill="#72edb1"/><circle cx="40" cy="29" r="1.6" fill="#72edb1"/>
-              <path d="m29 36 3 2 3-2-3-1Z" fill="#07110d"/><path d="M28 40c3 3 5 3 8 0" fill="none" stroke="#07110d" strokeWidth="1.7" strokeLinecap="round"/>
-              <path d="M26 48 22 57h20l-4-9m-9 0v9m6-9v9m-6-5h6" fill="none" stroke="#f7faf8" strokeWidth="2" strokeLinecap="round"/>
-              <circle cx="32" cy="52" r="3" fill="#07110d" stroke="#72edb1" strokeWidth="1.5"/>
-              <circle cx="49" cy="24" r="6" fill="#07110d" stroke="#f7faf8" strokeWidth="2"/><circle cx="49" cy="24" r="2" fill="#72edb1"/>
-              <path d="m51 18 3-9" stroke="#f7faf8" strokeWidth="2" strokeLinecap="round"/><circle cx="54" cy="8" r="2" fill="#f7faf8"/>
-            </svg>
-          </span><strong>GitAgent</strong>
-        </a>
-        <nav>
-          <a href="#workflow">Workflow</a>
-          <a href="#governance">Governance</a>
-          <a href="/signin">Sign in</a>
-          <a className="marketing-console" href="/signup">Create account</a>
-        </nav>
-      </header>
-
-      <section className="marketing-hero">
-        <div className="marketing-copy">
-          <p className="marketing-kicker">✣ GITAGENTFLOW · GOVERNED AI DEVELOPMENT</p>
-          <h1>The GitHub agent<br />with a <em>human<br />at merge.</em></h1>
-          <p className="marketing-lede">GitAgent turns approved work into isolated, reviewable pull requests—so AI can move the code forward without becoming the owner of your repository.</p>
-          <div className="marketing-actions">
-            <a className="marketing-primary" href="/signup">Start with GitHub <span>→</span></a>
-            <a className="marketing-secondary" href="#workflow">See the workflow</a>
-          </div>
-          <div className="marketing-proof">
-            <span>✓ Isolated branches</span><span>✓ Independent review</span><span>✓ Human merge gate</span>
-          </div>
-        </div>
-
-        <div className="marketing-visual" aria-label="GitAgent governed execution preview">
-          <div className="visual-glow" />
-          <div className="visual-window">
-            <div className="visual-bar"><span>● ● ●</span><strong>gitagent / task-184</strong><b>● running</b></div>
-            <div className="visual-body">
-              <div className="visual-badge-row"><span className="visual-icon">⌘</span><div><strong>Repository boundary</strong><small>acme/platform · scoped write</small></div><b>Verified</b></div>
-              <div className="visual-flow"><span>ISSUE APPROVED</span><i /><span>ISOLATED BRANCH</span><i /><span>REVIEW REQUIRED</span></div>
-              <div className="visual-code"><span>src/billing/refund.ts</span><strong>+18 −4</strong><code>+ requireApproval(refund, policy){'\n'}+ recordEvidence(action, decision)</code></div>
-              <div className="visual-review"><div><strong>Ready for your review</strong><small>policy check · 1 test suite · 0 secrets exposed</small></div><button>Review PR →</button></div>
-            </div>
-          </div>
-          <span className="floating-chip chip-one">⌘ Isolated execution</span>
-          <span className="floating-chip chip-two">♢ Evidence retained</span>
-        </div>
-      </section>
-
-      <section className="marketing-statement" id="workflow">
-        <p>THE CONTROL PLANE BETWEEN</p>
-        <h2>“Let the agent code” and<br /><em>“let the agent own the repo.”</em></h2>
-        <p>GitAgent creates a governed path from human intent to AI implementation, independent review, and a final human decision.</p>
-      </section>
-
-      <section className="marketing-features" id="governance">
-        {features.map(([n,title,copy]) => (
-          <article key={n}><span>{n}</span><h3>{title}</h3><p>{copy}</p></article>
-        ))}
-      </section>
-
-      <section className="marketing-final">
-        <p>GOVERNANCE WITHOUT THE BOTTLENECK</p>
-        <h2>Give agents enough authority to work.<br /><em>Keep the authority that matters.</em></h2>
-        <a className="marketing-primary" href="/signup">Create your account <span>→</span></a>
-      </section>
-
-      <footer className="marketing-footer"><strong>GitAgent</strong><span>GitAgentFlow.com · Governed AI development</span><a href="/signin">Sign in →</a></footer>
-    </main>
-  );
-}
+const logo = "data:image/webp;base64,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";
+const features=[['01','Isolated execution','Agents work inside execution-scoped branches and workspaces instead of receiving uncontrolled repository access.'],['02','Independent review','Implementation and review identities stay separate, preventing an agent from approving its own work.'],['03','Human merge gate','Sensitive transitions remain human decisions. AI can move work forward without owning the final merge.'],['04','AI policy builder','Describe the boundaries in plain English. GitAgent drafts an enforceable policy for human review.'],['05','Capability controls','Repository reads, branch writes, tests, pull requests, and protected actions are explicitly governed.'],['06','Audit evidence','Sponsorship, execution, denials, approvals, reviews, and policy changes are retained as evidence.']];
+const Github=()=> <svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M12 .7a11.5 11.5 0 0 0-3.64 22.41c.58.11.79-.25.79-.56v-2.2c-3.22.7-3.9-1.37-3.9-1.37-.53-1.34-1.29-1.7-1.29-1.7-1.05-.72.08-.71.08-.71 1.17.08 1.78 1.2 1.78 1.2 1.04 1.78 2.72 1.27 3.39.97.1-.75.4-1.27.74-1.56-2.57-.29-5.27-1.29-5.27-5.68 0-1.26.45-2.28 1.19-3.09-.12-.29-.52-1.47.11-3.05 0 0 .97-.31 3.16 1.18a10.9 10.9 0 0 1 5.76 0c2.19-1.49 3.16-1.18 3.16-1.18.63 1.58.23 2.76.11 3.05.74.81 1.19 1.83 1.19 3.09 0 4.4-2.71 5.38-5.29 5.67.42.36.79 1.07.79 2.16v3.21c0 .31.21.68.8.56A11.5 11.5 0 0 0 12 .7Z"/></svg>;
+export default function MarketingHome(){return <main className="ga2">
+<div className="ga2-grid"/><div className="ga2-orb ga2-orb-a"/><div className="ga2-orb ga2-orb-b"/>
+<header className="ga2-nav"><a className="ga2-brand" href="/"><img src={logo} alt="GitAgent mascot"/><strong>Git<span>Agent</span></strong></a><nav><a href="#workflow">Workflow</a><a href="#governance">Governance</a><a href="#docs">Docs</a><a href="/signin">Sign in</a><a className="ga2-account" href="/signup">Create account</a></nav></header>
+<section className="ga2-hero">
+<div className="ga2-copy"><p className="ga2-kicker">✣ GITAGENTFLOW · GOVERNED AI DEVELOPMENT</p><h1>The GitHub<br/>agent with a<br/><em>human at merge.</em></h1><p className="ga2-lede">GitAgent turns approved work into isolated, reviewable pull requests — so AI can move the code forward without becoming the owner of your repository.</p><div className="ga2-actions"><a className="ga2-primary" href="/signup"><span className="ga2-gh"><Github/></span>Start with GitHub <b>→</b></a><a className="ga2-secondary" href="#workflow">See the workflow</a></div><div className="ga2-proof"><span>✓ Isolated branches</span><span>✓ Independent review</span><span>✓ Human merge gate</span></div></div>
+<div className="ga2-stage"><img className="ga2-ghost" src={logo} alt=""/><div className="ga2-network"/><div className="ga2-console">
+<div className="ga2-consolebar"><span>● ● ●</span><b>gitagent / task-184</b><i>● running</i></div>
+<div className="ga2-consolebody"><aside><img src={logo} alt=""/><span className="on">⌂ Overview</span><span>⑂ Pull Requests</span><span>▣ Executions</span><span>◇ Approvals</span><span>▤ Repositories</span><span>⚙ Settings</span></aside><div className="ga2-work">
+<div className="ga2-boundary"><span className="ga2-cmd">⌘</span><div><strong>Repository boundary</strong><small>acme/platform · scoped write</small></div><b>Verified</b></div>
+<div className="ga2-flow"><span>✓ ISSUE APPROVED</span><i/><span>✓ ISOLATED BRANCH</span><i/><span>✓ REVIEW REQUIRED</span><i/><span>○ MERGE (HUMAN)</span></div>
+<div className="ga2-code"><div><span>src/billing/refund.ts</span><b>+18&nbsp;&nbsp;−4</b></div><code><em>- &nbsp;processRefund(amount)</em>{'\n'}+ &nbsp;requireApproval(refund, policy){'\n'}+ &nbsp;recordEvidence(action, decision)</code></div>
+<div className="ga2-review"><div><strong>✓ &nbsp;Ready for your review</strong><small>policy check · 1 test suite · 0 secrets exposed</small></div><button>Review PR →</button></div><div className="ga2-foot"><span>⌘ &nbsp;Isolated execution</span><span>a3f9c2e&nbsp;&nbsp;▢</span></div></div></div></div><span className="ga2-evidence">● &nbsp;Evidence retained</span></div>
+</section>
+<section className="marketing-statement" id="workflow"><p>THE CONTROL PLANE BETWEEN</p><h2>“Let the agent code” and<br/><em>“let the agent own the repo.”</em></h2><p>GitAgent creates a governed path from human intent to AI implementation, independent review, and a final human decision.</p></section>
+<section className="marketing-features" id="governance">{features.map(([n,t,c])=><article key={n}><span>{n}</span><h3>{t}</h3><p>{c}</p></article>)}</section>
+<section className="marketing-final" id="docs"><p>GOVERNANCE WITHOUT THE BOTTLENECK</p><h2>Give agents enough authority to work.<br/><em>Keep the authority that matters.</em></h2><a className="marketing-primary" href="/signup">Create your account <span>→</span></a></section>
+<footer className="marketing-footer"><strong>GitAgent</strong><span>GitAgentFlow.com · Governed AI development</span><a href="/signin">Sign in →</a></footer></main>}
