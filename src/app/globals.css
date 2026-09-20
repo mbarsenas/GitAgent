@@ -399,3 +399,44 @@ textarea { resize: vertical; }
 .marketing-brand .gitagent-mascot svg { width:42px;height:42px;display:block;filter:drop-shadow(0 0 9px rgba(114,237,177,.22)); }
 .marketing-brand:hover .gitagent-mascot svg { filter:drop-shadow(0 0 14px rgba(114,237,177,.38));transform:translateY(-1px); }
 .marketing-brand .gitagent-mascot svg { transition:transform .2s ease,filter .2s ease; }
+
+
+/* Approved GitAgentFlow hero rebuild */
+.marketing-nav { max-width:100%; padding-left:4.2vw; padding-right:4.2vw; background:linear-gradient(90deg,rgba(5,27,19,.96),rgba(6,38,26,.9)); border-bottom:1px solid rgba(114,237,177,.22); }
+.marketing-brand strong { font-size:22px;letter-spacing:-.035em; }
+.marketing-brand .gitagent-mascot,.marketing-brand .gitagent-mascot svg { width:58px;height:58px; }
+.marketing-brand .gitagent-mascot svg { filter:drop-shadow(0 0 12px rgba(76,255,167,.35)); }
+.marketing-hero { min-height:820px;max-width:100%;padding:118px 4.2vw 90px;grid-template-columns:minmax(480px,.88fr) minmax(620px,1.12fr);gap:4vw; }
+.marketing-copy h1 { font-size:clamp(64px,6.2vw,104px);line-height:.9;letter-spacing:-.07em;max-width:780px; }
+.marketing-copy h1 em { color:#68efae;font-style:normal;text-shadow:0 0 28px rgba(104,239,174,.12); }
+.marketing-lede { max-width:690px;font-size:18px;line-height:1.7; }
+.marketing-primary { min-width:250px;justify-content:space-between; }
+.marketing-visual { min-height:620px;perspective:1200px; }
+.hero-mascot { position:absolute;right:7%;top:-11%;width:310px;height:310px;color:rgba(111,239,177,.27);filter:drop-shadow(0 0 35px rgba(58,234,148,.15));z-index:0; }
+.hero-mascot svg { width:100%;height:100%; }
+.visual-window { width:106%;margin-left:-3%;top:90px;border-color:rgba(89,238,160,.52);box-shadow:0 38px 80px rgba(0,0,0,.45),0 0 60px rgba(42,218,132,.08);z-index:2; }
+.visual-shell { display:grid;grid-template-columns:150px minmax(0,1fr); }
+.visual-sidebar { border-right:1px solid rgba(76,186,128,.23);padding:20px 12px;display:flex;flex-direction:column;gap:9px;background:rgba(3,24,16,.6);font:600 10px/1.2 ui-monospace,monospace;color:#93b9a7; }
+.visual-sidebar span { padding:11px 10px;border-radius:5px;white-space:nowrap; }
+.visual-sidebar span.active { background:rgba(61,218,143,.16);color:#dff8eb;border:1px solid rgba(81,232,153,.16); }
+.mini-mascot { width:44px;height:44px;border:1px solid #54e79e;border-radius:50%;display:grid;place-items:center;margin:0 auto 9px;color:#72edb1;font-size:22px; }
+.visual-body { padding:22px 20px!important; }
+.visual-flow { grid-template-columns:auto 1fr auto 1fr auto 1fr auto!important;gap:8px!important; }
+.visual-flow span { font-size:8px!important;white-space:nowrap; }
+.visual-code { min-height:128px; }
+.visual-review { margin-top:12px; }
+.floating-chip { z-index:4; }
+@media (max-width:1100px) {
+  .marketing-hero { grid-template-columns:1fr;padding-top:80px; }
+  .marketing-visual { min-height:600px; }
+  .visual-window { width:94%;margin:0 auto; }
+}
+@media (max-width:700px) {
+  .marketing-nav { padding-left:20px;padding-right:20px; }
+  .marketing-brand .gitagent-mascot,.marketing-brand .gitagent-mascot svg { width:44px;height:44px; }
+  .marketing-hero { padding-left:24px;padding-right:24px;min-height:auto; }
+  .marketing-copy h1 { font-size:clamp(52px,15vw,74px); }
+  .visual-shell { grid-template-columns:1fr; }
+  .visual-sidebar { display:none; }
+  .hero-mascot { width:190px;height:190px;right:2%;top:0; }
+}
