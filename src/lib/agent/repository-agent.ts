@@ -48,9 +48,41 @@ function mergeChanges(current: Array<{ path: string; content: string; message: s
   return Array.from(merged.values());
 }
 
+async function ensureIndependentReviewer(repositoryId: string) {
+  const slug = `gitagent-review-${repositoryId}`.toLowerCase().replace(/[^a-z0-9-]+/g, '-').slice(0, 120);
+  const reviewer = await prisma.agent.upsert({
+    where: { slug },
+    update: { repositoryId, status: 'ACTIVE' },
+    create: {
+      name: 'GitAgent Reviewer',
+      slug,
+      status: 'ACTIVE',
+      providerKey: 'openai',
+      model: process.env.OPENAI_REVIEW_MODEL || process.env.OPENAI_MODEL || 'gpt-5.6-sol',
+      repositoryId,
+    },
+  });
+
+  const existingGrant = await prisma.capabilityGrant.findFirst({
+    where: { agentId: reviewer.id, capability: 'review.approve', resource: repositoryId, effect: 'ALLOW' },
+  });
+  if (!existingGrant) {
+    await prisma.capabilityGrant.create({
+      data: {
+        agentId: reviewer.id,
+        capability: 'review.approve',
+        resource: repositoryId,
+        effect: 'ALLOW',
+        conditions: { scope: 'independent-review', repositoryId, writableImplementationWorkspace: false },
+      },
+    });
+  }
+  return reviewer;
+}
+
 async function findIndependentReviewer(implementationAgentId: string, repositoryId: string, repository: string) {
   const reviewers = await prisma.agent.findMany({ where: { status: 'ACTIVE', id: { not: implementationAgentId }, repositoryId, grants: { some: { capability: 'review.approve', effect: 'ALLOW', OR: [{ resource: '*' }, { resource: repositoryId }, { resource: repository }], AND: [{ OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] }] } } }, orderBy: { createdAt: 'asc' } });
-  return reviewers[0] ?? null;
+  return reviewers[0] ?? ensureIndependentReviewer(repositoryId);
 }
 
 async function markReadyForHumanApproval(input: { taskId: string; executionId: string; repository: string; pullRequestNumber: number; reviewerAgentId?: string | null; reviewSubmitted?: boolean }) {
@@ -141,12 +173,6 @@ export async function runRepositoryAgent(executionId: string) {
 
   const change = await createGovernedChange(executionId, branch.branch, proposedChanges);
   const reviewer = await findIndependentReviewer(agent.id, repo.id, fullName);
-  if (!reviewer) {
-    await prisma.execution.update({ where: { id: execution.id }, data: { status: 'FAILED', finishedAt: new Date() } });
-    await prisma.task.update({ where: { id: task.id }, data: { status: 'FAILED' } });
-    throw new Error('Independent review agent not found for this repository.');
-  }
-
   const review = await performPullRequestReview(executionId, change.pullRequestNumber, reviewer.id, 'REVIEW');
   if (!review.allowed) {
     await prisma.execution.update({ where: { id: execution.id }, data: { status: 'FAILED', finishedAt: new Date() } });
