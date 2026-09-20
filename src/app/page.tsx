@@ -30,6 +30,7 @@ export default function MarketingHome() {
         <nav>
           <a href="#workflow">Workflow</a>
           <a href="#governance">Governance</a>
+          <a href="#docs">Docs</a>
           <a href="/signin">Sign in</a>
           <a className="marketing-console" href="/signup">Create account</a>
         </nav>
@@ -50,14 +51,23 @@ export default function MarketingHome() {
         </div>
 
         <div className="marketing-visual" aria-label="GitAgent governed execution preview">
+          <div className="hero-mascot" aria-hidden="true">
+            <svg viewBox="0 0 64 64"><path d="M18 19 14 8l12 7c4-2 8-2 12 0l12-7-4 13c3 4 4 8 3 13-1 8-7 13-17 15-10-2-16-7-17-15-1-6 0-11 3-15Z" fill="currentColor"/><path d="M19 27c4 0 7 2 9 6-5 1-9-1-11-5Zm26 0c-4 0-7 2-9 6 5 1 9-1 11-5Z" fill="#082016"/><circle cx="49" cy="24" r="6" fill="none" stroke="#082016" strokeWidth="2"/><path d="m51 18 3-9M26 47l-4 10m16-10 4 10m-13-9v9m6-9v9" stroke="#082016" strokeWidth="2"/></svg>
+          </div>
           <div className="visual-glow" />
           <div className="visual-window">
             <div className="visual-bar"><span>● ● ●</span><strong>gitagent / task-184</strong><b>● running</b></div>
-            <div className="visual-body">
+            <div className="visual-shell">
+              <aside className="visual-sidebar">
+                <div className="mini-mascot">⌘</div>
+                <span className="active">▣ Overview</span><span>⑂ Pull Requests</span><span>▱ Executions</span><span>◇ Approvals</span><span>▤ Repositories</span><span>⚙ Settings</span>
+              </aside>
+              <div className="visual-body">
               <div className="visual-badge-row"><span className="visual-icon">⌘</span><div><strong>Repository boundary</strong><small>acme/platform · scoped write</small></div><b>Verified</b></div>
-              <div className="visual-flow"><span>ISSUE APPROVED</span><i /><span>ISOLATED BRANCH</span><i /><span>REVIEW REQUIRED</span></div>
+              <div className="visual-flow"><span>✓ ISSUE APPROVED</span><i /><span>✓ ISOLATED BRANCH</span><i /><span>✓ REVIEW REQUIRED</span><i /><span>○ MERGE (HUMAN)</span></div>
               <div className="visual-code"><span>src/billing/refund.ts</span><strong>+18 −4</strong><code>+ requireApproval(refund, policy){'\n'}+ recordEvidence(action, decision)</code></div>
               <div className="visual-review"><div><strong>Ready for your review</strong><small>policy check · 1 test suite · 0 secrets exposed</small></div><button>Review PR →</button></div>
+            </div>
             </div>
           </div>
           <span className="floating-chip chip-one">⌘ Isolated execution</span>
