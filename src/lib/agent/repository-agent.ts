@@ -141,15 +141,27 @@ export async function runRepositoryAgent(executionId: string) {
 
   const change = await createGovernedChange(executionId, branch.branch, proposedChanges);
   const reviewer = await findIndependentReviewer(agent.id, repo.id, fullName);
-  let reviewSubmitted = false;
-  if (reviewer) {
-    const review = await performPullRequestReview(executionId, change.pullRequestNumber, reviewer.id, 'REVIEW');
-    if (review.allowed) {
-      const approval = await performPullRequestReview(executionId, change.pullRequestNumber, reviewer.id, 'APPROVE');
-      reviewSubmitted = approval.allowed;
-    }
+  if (!reviewer) {
+    await prisma.execution.update({ where: { id: execution.id }, data: { status: 'FAILED', finishedAt: new Date() } });
+    await prisma.task.update({ where: { id: task.id }, data: { status: 'FAILED' } });
+    throw new Error('Independent review agent not found for this repository.');
   }
+
+  const review = await performPullRequestReview(executionId, change.pullRequestNumber, reviewer.id, 'REVIEW');
+  if (!review.allowed) {
+    await prisma.execution.update({ where: { id: execution.id }, data: { status: 'FAILED', finishedAt: new Date() } });
+    await prisma.task.update({ where: { id: task.id }, data: { status: 'FAILED' } });
+    throw new Error(`Independent GitAgent-Review review was denied: ${review.reasonCode}`);
+  }
+
+  const approval = await performPullRequestReview(executionId, change.pullRequestNumber, reviewer.id, 'APPROVE');
+  if (!approval.allowed || approval.approvalSubmitted !== true || approval.reviewGitHubApp !== 'gitagent-review') {
+    await prisma.execution.update({ where: { id: execution.id }, data: { status: 'FAILED', finishedAt: new Date() } });
+    await prisma.task.update({ where: { id: task.id }, data: { status: 'FAILED' } });
+    throw new Error('Independent GitAgent-Review approval was not submitted successfully.');
+  }
+
   await requestHumanMergeApproval(executionId, change.pullRequestNumber);
-  await markReadyForHumanApproval({ taskId: task.id, executionId, repository: fullName, pullRequestNumber: change.pullRequestNumber, reviewerAgentId: reviewer?.id ?? null, reviewSubmitted });
+  await markReadyForHumanApproval({ taskId: task.id, executionId, repository: fullName, pullRequestNumber: change.pullRequestNumber, reviewerAgentId: reviewer.id, reviewSubmitted: true });
   return { executionId, repository: fullName, pullRequestNumber: change.pullRequestNumber, status: 'WAITING_APPROVAL' as const };
 }
