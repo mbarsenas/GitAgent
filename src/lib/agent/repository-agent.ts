@@ -20,7 +20,7 @@ type AgentPlan = { summary: string; files: Array<{ path: string; reason: string 
 
 async function github<T>(url: string, token: string, init: RequestInit = {}) {
   const response = await fetch(url, { ...init, cache: 'no-store', headers: { Accept: 'application/vnd.github+json', Authorization: `Bearer ${token}`, 'X-GitHub-Api-Version': VERSION, 'User-Agent': 'GitAgent-Control', 'Content-Type': 'application/json', ...init.headers } });
-  if (!response.ok) throw new Error(`GitHub API ${response.status}: ${(await response.text()).slice(0, 500)}`);
+  if (!response.ok) throw new Error(`GitHub API request failed (${response.status}).`);
   return response.json() as Promise<T>;
 }
 

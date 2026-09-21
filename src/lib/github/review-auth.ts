@@ -82,7 +82,7 @@ export async function createReviewInstallationToken(owner?: string, repo?: strin
     method: 'POST', cache: 'no-store',
     headers: { Accept: 'application/vnd.github+json', Authorization: `Bearer ${jwt()}`, 'X-GitHub-Api-Version': API_VERSION, 'User-Agent': 'GitAgent-Review' },
   });
-  if (!response.ok) throw new Error(`GitHub Review App API ${response.status}: ${(await response.text()).slice(0, 500)}`);
+  if (!response.ok) throw new Error(`GitHub Review App request failed (${response.status}).`);
   const result = await response.json() as { token: string; expires_at: string };
   return { ...result, appSlug: config.appSlug, installationId };
 }

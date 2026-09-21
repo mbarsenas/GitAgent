@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { requireCurrentUser } from '@/lib/auth/current-user';
 import { prisma } from '@/lib/db/prisma';
 import { syncGitHubInstallationRepositories } from '@/lib/github/sync';
+import { publicError } from '@/lib/http/public-error';
 
 export const dynamic = 'force-dynamic';
 
@@ -34,8 +35,7 @@ export async function POST() {
       tokenExpiresAt: result.expiresAt,
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'GitHub repository sync failed';
-    const status = message === 'UNAUTHENTICATED' ? 401 : 500;
-    return NextResponse.json({ ok: false, error: message }, { status });
+    const unauthenticated = error instanceof Error && error.message === 'UNAUTHENTICATED';
+    return NextResponse.json({ ok: false, error: publicError(error, 'GitHub repository sync failed.') }, { status: unauthenticated ? 401 : 500 });
   }
 }

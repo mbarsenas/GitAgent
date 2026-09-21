@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { requireCurrentUser } from '@/lib/auth/current-user';
+import { publicError } from '@/lib/http/public-error';
 
 export const dynamic = 'force-dynamic';
 
@@ -85,7 +86,7 @@ Return ONLY valid JSON:
       body: JSON.stringify({ model: MODEL, input: prompt }),
     });
     const body = await response.json() as { output_text?: string; output?: Array<{ content?: Array<{ type?: string; text?: string }> }>; error?: { message?: string } };
-    if (!response.ok) throw new Error(body.error?.message || `OpenAI request failed (${response.status})`);
+    if (!response.ok) throw new Error(`OpenAI policy request failed (${response.status}).`);
 
     const text = body.output_text ?? body.output?.flatMap((item) => item.content ?? []).map((item) => item.text ?? '').join('\n') ?? '';
     const draft = JSON.parse(extractJson(text)) as PolicyDraft;
@@ -95,6 +96,7 @@ Return ONLY valid JSON:
 
     return NextResponse.json({ ok: true, draft });
   } catch (error) {
-    return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : 'Policy generation failed' }, { status: 500 });
+    const unauthenticated = error instanceof Error && error.message === 'UNAUTHENTICATED';
+    return NextResponse.json({ ok: false, error: publicError(error, 'Policy generation failed.') }, { status: unauthenticated ? 401 : 500 });
   }
 }

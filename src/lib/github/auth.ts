@@ -43,8 +43,7 @@ async function githubFetch<T>(url: string, token: string, init: RequestInit = {}
   });
 
   if (!response.ok) {
-    const body = await response.text();
-    throw new Error(`GitHub API ${response.status}: ${body.slice(0, 500)}`);
+    throw new Error(`GitHub API request failed (${response.status}).`);
   }
 
   return (await response.json()) as T;

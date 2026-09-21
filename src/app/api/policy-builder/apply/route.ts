@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { requireCurrentUser } from '@/lib/auth/current-user';
+import { publicError } from '@/lib/http/public-error';
 
 export const dynamic = 'force-dynamic';
 
@@ -96,6 +97,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ ok: true, policyVersion, repository: `${repository.owner}/${repository.name}`, grants });
   } catch (error) {
-    return NextResponse.json({ ok: false, error: error instanceof Error ? error.message : 'Policy apply failed' }, { status: 500 });
+    const unauthenticated = error instanceof Error && error.message === 'UNAUTHENTICATED';
+    return NextResponse.json({ ok: false, error: publicError(error, 'Policy apply failed.') }, { status: unauthenticated ? 401 : 500 });
   }
 }

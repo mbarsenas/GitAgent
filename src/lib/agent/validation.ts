@@ -75,7 +75,7 @@ async function github<T>(url: string, token: string) {
   });
 
   if (!response.ok) {
-    throw new Error(`GitHub API ${response.status}: ${(await response.text()).slice(0, 500)}`);
+    throw new Error(`GitHub API request failed (${response.status}).`);
   }
 
   return response.json() as Promise<T>;
