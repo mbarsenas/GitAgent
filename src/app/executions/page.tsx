@@ -32,13 +32,21 @@ export default async function ExecutionsPage() {
         </div>
       </div>
 
-      <section className="panel">
+      <section className="panel executions-panel">
         <div className="panel-head">
           <div>
             <span className="panel-label">EXECUTIONS</span>
             <h2>Task, identity, workspace, and outcome</h2>
           </div>
           <span className="counter">{executions.length} shown</span>
+        </div>
+
+        <div className="execution-table-head" aria-hidden="true">
+          <span>Task</span>
+          <span>Agent</span>
+          <span>Status</span>
+          <span>Workspace</span>
+          <span>Created</span>
         </div>
 
         {executions.length === 0 ? (
@@ -50,10 +58,10 @@ export default async function ExecutionsPage() {
                 <strong>{execution.task.title}</strong>
                 <span>{execution.task.repository.owner}/{execution.task.repository.name}</span>
               </div>
-              <div><span className="label">Agent</span><strong>{execution.agent.name}</strong></div>
-              <div><span className="label">Status</span><strong>{execution.status}</strong></div>
-              <div><span className="label">Workspace</span><strong>{execution.workspace?.status ?? 'NONE'}</strong></div>
-              <div><span className="label">Created</span><strong>{execution.createdAt.toISOString().slice(0, 19).replace('T', ' ')}</strong></div>
+              <div><strong>{execution.agent.name}</strong></div>
+              <div><strong>{execution.status}</strong></div>
+              <div><strong>{execution.workspace?.status ?? 'NONE'}</strong></div>
+              <div><strong>{execution.createdAt.toISOString().slice(0, 19).replace('T', ' ')}</strong></div>
             </a>
           ))
         )}
