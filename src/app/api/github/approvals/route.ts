@@ -13,7 +13,11 @@ export async function GET() {
           { status: 'PENDING' },
           // An approved merge remains actionable until GitAgent-Control executes it.
           // Keep it visible to the same tenant instead of stranding the second phase.
-          { status: 'APPROVED', action: { startsWith: 'pr.merge:' } },
+          {
+            status: 'APPROVED',
+            action: { startsWith: 'pr.merge:' },
+            task: { status: { not: 'SUCCEEDED' } },
+          },
         ],
       },
       orderBy: { requestedAt: 'asc' },
