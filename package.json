@@ -12,7 +12,8 @@
     "db:generate": "prisma generate",
     "db:migrate": "prisma migrate dev",
     "db:seed": "prisma db seed",
-    "db:studio": "prisma studio"
+    "db:studio": "prisma studio",
+    "db:backfill-repository-owners": "tsx scripts/backfill-repository-owners.ts"
   },
   "dependencies": {
     "@prisma/client": "^6.16.1",

@@ -2,7 +2,7 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 async function main() {
   const user = await prisma.user.upsert({ where: { email: 'demo@gitagent.local' }, update: {}, create: { email: 'demo@gitagent.local', name: 'GitAgent Demo User' } });
-  const repository = await prisma.repository.upsert({ where: { provider_externalId: { provider: 'github', externalId: '1373462743' } }, update: { owner: 'mbarsenas', name: 'GitAgent', defaultBranch: 'main' }, create: { provider: 'github', externalId: '1373462743', owner: 'mbarsenas', name: 'GitAgent', defaultBranch: 'main' } });
+  const repository = await prisma.repository.upsert({ where: { provider_externalId: { provider: 'github', externalId: '1373462743' } }, update: { owner: 'mbarsenas', name: 'GitAgent', defaultBranch: 'main', userId: user.id }, create: { provider: 'github', externalId: '1373462743', owner: 'mbarsenas', name: 'GitAgent', defaultBranch: 'main', userId: user.id } });
   const agent = await prisma.agent.upsert({ where: { slug: 'demo-implementation-agent' }, update: { repositoryId: repository.id }, create: { name: 'Demo Implementation Agent', slug: 'demo-implementation-agent', providerKey: 'openai', model: 'codex', repositoryId: repository.id } });
   const reviewer = await prisma.agent.upsert({ where: { slug: 'demo-review-agent' }, update: { repositoryId: repository.id }, create: { name: 'Demo Review Agent', slug: 'demo-review-agent', providerKey: 'openai', model: 'codex-review', repositoryId: repository.id } });
   const capabilities = ['repository.read', 'branch.create', 'branch.write', 'pr.create'];
