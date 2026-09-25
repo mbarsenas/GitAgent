@@ -49,6 +49,8 @@ Audit Record
 Changelog / Documentation Update
 ```
 
+Before pull-request review, GitAgent validates generated coding changes and attempts bounded repairs when validation fails.
+
 ## Repository structure
 
 - `AGENTS.md` — repository-level operating contract for AI agents.
