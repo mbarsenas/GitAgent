@@ -65,24 +65,75 @@ export default async function ExecutionsPage({ searchParams }: { searchParams?: 
             <span className="panel-label">EXECUTIONS</span>
             <h2>Task, identity, workspace, and outcome</h2>
           </div>
-          <div className="execution-panel-actions">
-            <nav className="status-filter" aria-label="Execution status filter">
-              {filterOptions.map((option) => (
-                <a
-                  key={option.key}
-                  href={`/executions?status=${option.key}`}
-                  className={activeFilter === option.key ? 'active' : ''}
-                  aria-current={activeFilter === option.key ? 'page' : undefined}
-                >
-                  {option.label}
-                </a>
-              ))}
+          <div
+            className="execution-panel-actions"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'flex-end',
+              gap: '12px',
+              flexWrap: 'wrap',
+            }}
+          >
+            <nav
+              className="status-filter"
+              aria-label="Execution status filter"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                flexWrap: 'wrap',
+              }}
+            >
+              {filterOptions.map((option) => {
+                const isActive = activeFilter === option.key;
+
+                return (
+                  <a
+                    key={option.key}
+                    href={`/executions?status=${option.key}`}
+                    className={isActive ? 'active' : ''}
+                    aria-current={isActive ? 'page' : undefined}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      minHeight: '26px',
+                      padding: '4px 8px',
+                      border: `1px solid ${isActive ? 'var(--accent)' : 'var(--border)'}`,
+                      background: isActive ? 'rgba(114, 237, 177, .12)' : 'transparent',
+                      color: isActive ? 'var(--accent)' : 'var(--muted)',
+                      fontSize: '8px',
+                      fontWeight: isActive ? 800 : 600,
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    {option.label}
+                  </a>
+                );
+              })}
             </nav>
             <span className="counter">{filteredExecutions.length} shown</span>
           </div>
         </div>
 
-        <div className="execution-table-head" aria-hidden="true">
+        <div
+          className="execution-table-head"
+          aria-hidden="true"
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'minmax(220px, 1.5fr) minmax(150px, 1fr) minmax(88px, .55fr) minmax(90px, .6fr) minmax(150px, .8fr)',
+            alignItems: 'center',
+            gap: '12px',
+            padding: '8px 12px',
+            borderBottom: '1px solid var(--border-soft)',
+            color: 'var(--muted)',
+            fontSize: '8px',
+            fontWeight: 700,
+            letterSpacing: '.06em',
+            textTransform: 'uppercase',
+          }}
+        >
           <span>Task</span>
           <span>Agent</span>
           <span>Status</span>
