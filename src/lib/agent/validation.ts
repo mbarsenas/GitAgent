@@ -221,8 +221,8 @@ export async function validateRepositorySnapshot(input: {
     if (detected.projectType === 'node') {
       const hasLockfile = await access(path.join(repoDir, 'package-lock.json')).then(() => true, () => false);
       const installCommand = hasLockfile
-        ? 'npm ci --no-audit --no-fund'
-        : 'npm install --no-save --no-package-lock --no-audit --no-fund';
+        ? 'npm ci --ignore-scripts --no-audit --no-fund'
+        : 'npm install --ignore-scripts --no-save --no-package-lock --no-audit --no-fund';
       const installation = await runCommand(installCommand, repoDir);
       results.push({ label: 'dependencies', command: installCommand, ...installation });
       if (installation.exitCode !== 0) {
