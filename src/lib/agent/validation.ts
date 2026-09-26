@@ -1,8 +1,9 @@
-import { mkdtemp, rm, writeFile, mkdir } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile, mkdir, access } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { prisma } from '@/lib/db/prisma';
 import { createInstallationToken } from '@/lib/github/auth';
+import { isDocumentationOnly } from './validation-scope';
 
 const API = 'https://api.github.com';
 const VERSION = '2022-11-28';
@@ -43,9 +44,11 @@ function detectCommands(files: Map<string, string>): { projectType: string; comm
       const parsed = JSON.parse(packageJson) as { scripts?: Record<string, string> };
       const scripts = parsed.scripts ?? {};
       const commands: ValidationCommand[] = [];
-      if (scripts.lint) commands.push({ label: 'lint', command: 'npm run lint' });
+      // `next lint` prompts for initial setup when no ESLint configuration exists.
+      const lintConfigured = [...files.keys()].some((file) => /^(?:eslint\.config\.[cm]?js|\.eslintrc(?:\.[a-z]+)?)$/.test(file));
+      if (scripts.lint && (scripts.lint !== 'next lint' || lintConfigured)) commands.push({ label: 'lint', command: 'npm run lint' });
       if (scripts.typecheck) commands.push({ label: 'typecheck', command: 'npm run typecheck' });
-      if (scripts.test) commands.push({ label: 'test', command: 'npm test -- --runInBand' });
+      if (scripts.test) commands.push({ label: 'test', command: 'npm test' });
       if (scripts.build) commands.push({ label: 'build', command: 'npm run build' });
       return { projectType: 'node', commands };
     } catch {
@@ -151,6 +154,10 @@ export async function validateRepositorySnapshot(input: {
   branch: string;
   files: Array<{ path: string; content: string }>;
 }) {
+  if (isDocumentationOnly(input.files.map((file) => file.path))) {
+    return { passed: true, projectType: 'documentation', commands: [] } satisfies ValidationResult;
+  }
+
   const repository = await prisma.repository.findFirst({
     where: { provider: 'github', owner: input.owner, name: input.name },
     select: {
@@ -201,12 +208,27 @@ export async function validateRepositorySnapshot(input: {
       trackedFiles.set('requirements.txt', requirements);
     } catch {}
 
+    for (const config of ['eslint.config.js', 'eslint.config.mjs', 'eslint.config.cjs', '.eslintrc', '.eslintrc.js', '.eslintrc.json']) {
+      if (await access(path.join(repoDir, config)).then(() => true, () => false)) trackedFiles.set(config, '');
+    }
+
     const detected = detectCommands(trackedFiles);
     if (detected.commands.length === 0) {
       return { passed: true, projectType: detected.projectType, commands: [] } satisfies ValidationResult;
     }
 
     const results: ValidationResult['commands'] = [];
+    if (detected.projectType === 'node') {
+      const hasLockfile = await access(path.join(repoDir, 'package-lock.json')).then(() => true, () => false);
+      const installCommand = hasLockfile
+        ? 'npm ci --no-audit --no-fund'
+        : 'npm install --no-save --no-package-lock --no-audit --no-fund';
+      const installation = await runCommand(installCommand, repoDir);
+      results.push({ label: 'dependencies', command: installCommand, ...installation });
+      if (installation.exitCode !== 0) {
+        return { passed: false, projectType: detected.projectType, commands: results } satisfies ValidationResult;
+      }
+    }
     for (const item of detected.commands) {
       const result = await runCommand(item.command, repoDir);
       results.push({
