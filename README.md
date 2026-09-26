@@ -13,7 +13,7 @@ GitAgent is an AI-native Git collaboration platform designed around first-class 
 
 ## Core workflow
 
-Before pull-request review, GitAgent validates generated coding changes and, when validation fails, attempts bounded repairs before surfacing the result for review.
+Before pull-request review, GitAgent validates generated coding changes and, when validation fails, attempts bounded repairs before surfacing the result for review. Documentation-only changes skip code commands; Node.js code validation installs snapshot dependencies before running the repository's applicable scripts.
 
 ```text
 Idea
