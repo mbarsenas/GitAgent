@@ -21,7 +21,7 @@ export async function POST() {
       return NextResponse.json({ ok: false, error: 'GitHub App installation is not connected for this account' }, { status: 409 });
     }
 
-    const result = await syncGitHubInstallationRepositories(user.githubInstallationId, user.id);
+    const result = await syncGitHubInstallationRepositories(user.id, user.githubInstallationId);
     const repos = await prisma.repository.findMany({
       where: { provider: 'github', userId: user.id },
       orderBy: [{ owner: 'asc' }, { name: 'asc' }, { createdAt: 'asc' }],
