@@ -36,7 +36,16 @@ export async function POST() {
       });
       if (updated.count === 0) return false;
       await tx.task.updateMany({
-        where: { id: execution.taskId, status: 'RUNNING' },
+        where: {
+          id: execution.taskId,
+          status: { in: ['QUEUED', 'RUNNING', 'WAITING_APPROVAL'] },
+          executions: {
+            none: {
+              id: { not: execution.id },
+              status: { in: ['RUNNING', 'SUCCEEDED'] },
+            },
+          },
+        },
         data: { status: 'FAILED' },
       });
       const workspace = await tx.executionWorkspace.findUnique({ where: { executionId: execution.id } });
