@@ -113,7 +113,7 @@ export default function PolicyBuilderPage() {
         {reviewing ? <article className="panel" style={{ gridColumn: '1 / -1' }}>
           <div className="panel-head"><div><span className="panel-label">FINAL HUMAN REVIEW</span><h2>Choose the target and explicitly apply this policy</h2></div><span className="counter" style={{ color: 'var(--warn)' }}>NOT APPLIED YET</span></div>
           <form onSubmit={applyPolicy} style={{ padding: 16, display: 'grid', gap: 16 }}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12 }}>
+            <div className="form-grid form-grid-three">
               <label><span className="label">Repository</span><select name="repositoryId" required style={{ width: '100%', marginTop: 6 }}>{bootstrap.repositories.map((r) => <option key={r.id} value={r.id}>{r.owner ? `${r.owner} / ` : ''}{r.name}</option>)}</select></label>
               <label><span className="label">Agent</span><select name="agentId" required style={{ width: '100%', marginTop: 6 }}>{bootstrap.agents.map((a) => <option key={a.id} value={a.id}>{a.name ?? a.slug}</option>)}</select></label>
               <label><span className="label">Policy author</span><strong>{bootstrap.users[0]?.name ?? bootstrap.users[0]?.email ?? 'Authenticated user'}</strong></label>

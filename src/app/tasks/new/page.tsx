@@ -134,7 +134,7 @@ export default function NewTaskPage() {
             />
           </label>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12 }}>
+          <div className="form-grid form-grid-three">
             <label>
               <span className="label">Repository</span>
               <select name="repositoryId" required style={{ width: '100%', marginTop: 6 }} disabled={bootstrap.repositories.length === 0}>
@@ -165,7 +165,7 @@ export default function NewTaskPage() {
             </label>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div className="form-grid form-grid-two">
             <label>
               <span className="label">Maximum cost (USD)</span>
               <input name="maxCostUsd" type="number" min="0.01" step="0.01" defaultValue="1.00" style={{ width: '100%', marginTop: 6 }} />
