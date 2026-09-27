@@ -5,6 +5,7 @@ export default function PricingPage() {
         <a href="/" className="pricing-brand">Git<span>Agent</span></a>
         <nav>
           <a href="/">Home</a>
+          <a href="/pricing" aria-current="page">Pricing</a>
           <a href="/signin">Sign in</a>
           <a href="/signup" className="pricing-nav-cta">Create account</a>
         </nav>
