@@ -24,3 +24,8 @@ New executions now run the nine boundary checks automatically after independent 
 Release verification includes type checks, regression tests, production build, dependency audit, browser checks, and production health. A fresh authenticated coding task is still required to verify real model access, GitHub installation permissions, isolated validation, independent review, and human merge against production credentials.
 
 Restricted agents now create one `CREATED` execution with an execution-bound approval and a waiting task. The task form directs the owner to approvals without starting the run. Approving resumes that same execution through the normal runner. Quarantined agents cannot create tasks, and reviewer identities are not offered as implementation agents.
+
+
+## Budget limitation
+
+Task cost and token values are planning targets, not enforced model spending limits. The task form labels them accordingly. Hard per-execution usage accounting and budget enforcement remain future work; use provider account controls for hard limits meanwhile.
