@@ -174,14 +174,17 @@ export default function NewTaskPage() {
 
           <div className="form-grid form-grid-two">
             <label>
-              <span className="label">Maximum cost (USD)</span>
+              <span className="label">Cost target (USD)</span>
               <input name="maxCostUsd" type="number" min="0.01" step="0.01" defaultValue="1.00" style={{ width: '100%', marginTop: 6 }} />
             </label>
             <label>
-              <span className="label">Maximum tokens</span>
+              <span className="label">Token target</span>
               <input name="maxTokens" type="number" min="1000" step="1000" defaultValue="20000" style={{ width: '100%', marginTop: 6 }} />
             </label>
           </div>
+          <p className="muted" style={{ margin: '-8px 0 0' }}>
+            These are recorded task targets, not enforced spending limits. Set provider-side spending controls for hard limits.
+          </p>
 
           <div className="guardrail-list" style={{ border: '1px solid var(--border)' }}>
             <div><span>Read repository</span><strong>ALLOW</strong></div>
