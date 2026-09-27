@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifySession } from '@/lib/auth/session';
 
-const PUBLIC_PATHS = new Set(['/', '/signin', '/signup', '/api/health']);
+const PUBLIC_PATHS = new Set(['/', '/signin', '/signup', '/pricing', '/api/health']);
 const PUBLIC_PREFIXES = ['/api/auth/', '/api/github/webhook'];
 
 export async function middleware(request: NextRequest) {
