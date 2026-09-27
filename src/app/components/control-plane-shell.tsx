@@ -42,6 +42,10 @@ export function ControlPlaneShell({ children, active, title, subtitle }: { child
           ))}
         </nav>
         <div className="rail-footer"><span className="status-dot" />policy engine online</div>
+        <section className="rail-account" aria-label="Account">
+          <span className="rail-account-label">ACCOUNT</span>
+          <a className="rail-signout" href="/api/auth/signout">Sign out <span aria-hidden="true">↗</span></a>
+        </section>
       </aside>
 
       <section className="main-panel">{children}</section>

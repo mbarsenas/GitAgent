@@ -328,3 +328,11 @@ h2 { margin: 4px 0 0; font-family: ui-sans-serif, system-ui, sans-serif; font-si
   input, select, textarea { max-width: 100%; }
   pre, code { overflow-wrap: anywhere; }
 }
+
+
+.rail-account { margin-top: auto; padding: 16px; border-top: 1px solid var(--border); display: grid; gap: 8px; }
+.rail-account-label { color: var(--muted); font-size: 9px; font-weight: 800; letter-spacing: .12em; }
+.rail-signout { min-height: 40px; padding: 0 12px; display: flex; align-items: center; justify-content: space-between; border: 1px solid var(--border); color: var(--text); font-size: 12px; font-weight: 800; text-decoration: none; }
+.rail-signout:hover, .rail-signout:focus-visible { border-color: var(--accent); color: var(--accent); outline: none; }
+@media (max-width: 1000px) { .rail-account { margin-top: 0; padding: 8px 12px; grid-template-columns: auto minmax(96px, 160px); align-items: center; justify-content: end; border-top: 0; border-bottom: 1px solid var(--border); } }
+@media (max-width: 600px) { .rail-account { position: sticky; right: 0; bottom: 0; z-index: 3; background: var(--panel, #071b13); padding: 8px 14px; grid-template-columns: auto minmax(110px, 1fr); justify-content: stretch; } .rail-signout { min-height: 42px; } }
