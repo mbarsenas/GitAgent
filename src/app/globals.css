@@ -336,3 +336,7 @@ h2 { margin: 4px 0 0; font-family: ui-sans-serif, system-ui, sans-serif; font-si
 .rail-signout:hover, .rail-signout:focus-visible { border-color: var(--accent); color: var(--accent); outline: none; }
 @media (max-width: 1000px) { .rail-account { margin-top: 0; padding: 8px 12px; grid-template-columns: auto minmax(96px, 160px); align-items: center; justify-content: end; border-top: 0; border-bottom: 1px solid var(--border); } }
 @media (max-width: 600px) { .rail-account { position: sticky; right: 0; bottom: 0; z-index: 3; background: var(--panel, #071b13); padding: 8px 14px; grid-template-columns: auto minmax(110px, 1fr); justify-content: stretch; } .rail-signout { min-height: 42px; } }
+
+.check-passed { color: var(--good); font-weight: 900; }
+.check-failed { color: var(--danger); font-weight: 900; }
+.posture-list > div small { margin-left: auto; color: var(--muted); font-size: 9px; letter-spacing: .08em; }
