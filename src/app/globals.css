@@ -269,3 +269,55 @@ h2 { margin: 4px 0 0; font-family: ui-sans-serif, system-ui, sans-serif; font-si
   .auth-card { padding:28px 22px; }
   .auth-card h1 { font-size:34px; }
 }
+
+/* The control plane uses the same shell on every signed-in route. */
+@media (max-width: 1000px) {
+  .workspace { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto minmax(0, 1fr); }
+  .chrome { grid-column: 1; grid-row: 1; grid-template-columns: auto minmax(0, 1fr); min-width: 0; }
+  .product-mark { border-right: 0; }
+  .repo-context { padding: 0 12px; justify-content: flex-end; }
+  .chrome-actions { grid-column: 1 / -1; justify-content: flex-start; padding: 0 12px 10px; }
+  .rail { grid-column: 1; grid-row: 2; min-height: 0; border-right: 0; border-bottom: 1px solid var(--border); }
+  .rail nav { display: flex; overflow-x: auto; overscroll-behavior-inline: contain; gap: 4px; padding: 8px 12px; scrollbar-width: thin; }
+  .rail nav a { display: flex; flex: 0 0 auto; gap: 6px; min-height: 38px; padding: 0 12px; white-space: nowrap; border-left: 0; border-bottom: 2px solid transparent; }
+  .rail nav a.active { border-left: 0; border-bottom-color: var(--accent); }
+  .rail-footer { display: none; }
+  .main-panel { grid-column: 1; grid-row: 3; min-width: 0; padding: 20px; }
+  .command-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .metric-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .client-hero, .client-grid, .ops-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (max-width: 600px) {
+  .chrome { position: relative; grid-template-columns: minmax(0, 1fr); }
+  .product-mark { height: 54px; }
+  .repo-context { justify-content: flex-start; padding: 0 14px 9px; flex-wrap: wrap; gap: 5px 9px; }
+  .repo-context strong { max-width: 100%; }
+  .chrome-actions { gap: 6px; }
+  .chrome-actions a { min-height: 38px; }
+  .main-panel { padding: 14px; }
+  .section-head { align-items: flex-start; flex-direction: column; }
+  .head-meta { flex-wrap: wrap; }
+  .command-strip, .metric-grid, .steps-grid { grid-template-columns: minmax(0, 1fr); }
+  .command-strip > div { min-height: 58px; border-right: 0; border-bottom: 1px solid var(--border); }
+  .client-hero { padding: 16px; }
+  .client-hero h1 { font-size: 23px; }
+  .client-list-row { align-items: flex-start; flex-wrap: wrap; }
+  .detail-list > div, .execution-detail-page .execution-detail-list > div { grid-template-columns: minmax(0, 1fr); gap: 3px; }
+  .timeline-row > div, .execution-detail-page .execution-detail-timeline .timeline-row > div,
+  .guardrail-list > div { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .event-evidence { justify-content: start; }
+  .main-panel .panel p, .main-panel .panel li, .main-panel .panel td,
+  .main-panel .panel th, .main-panel .panel label,
+  .main-panel .panel .github-boundary-copy, .main-panel .panel .github-boundary-copy p,
+  .main-panel .event-table, .main-panel .guardrail-list, .main-panel .audit-meta-grid,
+  .main-panel .event-summary, .main-panel .event-evidence,
+  .main-panel .execution-row, .main-panel .approval-row { font-size: 12px; }
+  .main-panel .event-table strong, .main-panel .guardrail-list strong,
+  .main-panel .audit-meta-grid strong, .main-panel .execution-row strong,
+  .main-panel .approval-row strong { font-size: 12px; }
+  .label, .panel-label, .client-list-row span, .execution-row span:not(.label),
+  .approval-meta span, .event-evidence, .metric-card small { font-size: 11px; }
+  input, select, textarea { max-width: 100%; }
+  pre, code { overflow-wrap: anywhere; }
+}
