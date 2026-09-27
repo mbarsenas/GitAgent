@@ -340,3 +340,15 @@ h2 { margin: 4px 0 0; font-family: ui-sans-serif, system-ui, sans-serif; font-si
 .check-passed { color: var(--good); font-weight: 900; }
 .check-failed { color: var(--danger); font-weight: 900; }
 .posture-list > div small { margin-left: auto; color: var(--muted); font-size: 9px; letter-spacing: .08em; }
+
+
+/* Compact dashboard typography: keep the control plane dense and scannable. */
+h1 { font-size: 20px; }
+h2 { font-size: 13px; }
+.client-hero h1 { font-size: 19px; line-height: 1.2; }
+.client-lede { font-size: 10px; }
+.protection-card strong { font-size: 18px; }
+.metric-card strong, .customer-metrics .metric-card strong { font-size: 16px; }
+.step-card strong { font-size: 10px; }
+.panel-head h2 { font-size: 12px; }
+@media (max-width: 600px) { .client-hero h1 { font-size: 17px; } }
