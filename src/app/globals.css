@@ -367,3 +367,10 @@ h2 { font-size: 13px; }
 .pricing-note h2 { font-size: 15px; }
 .pricing-note p { font-size: 11px; }
 @media(max-width:640px) { .pricing-hero { padding-top: 40px; } .pricing-hero h1 { font-size: 20px; } .pricing-current { width: calc(100% - 28px); } }
+
+.pricing-current .pricing-description { min-height: 0; margin: 10px 0; }
+.pricing-current .pricing-card ul { margin-top: 12px; }
+.pricing-current .pricing-card li { align-items: flex-start; gap: 8px; }
+.pricing-current .pricing-card li::before { content: '✓'; flex: 0 0 auto; color: #62e7a5; font-weight: 800; }
+.pricing-current .pricing-card li::first-letter { color: inherit; }
+@media(max-width:900px) { .pricing-nav nav>a[aria-current='page'] { display: inline-flex; } }
