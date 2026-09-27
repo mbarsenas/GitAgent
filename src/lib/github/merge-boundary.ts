@@ -1,3 +1,4 @@
+import { reviewMatchesHead } from './review-verdict';
 import { prisma } from '@/lib/db/prisma';
 import { sealExecutionWorkspace } from '@/lib/governance/workspace';
 import { createInstallationToken } from './auth';
@@ -106,13 +107,17 @@ export async function requestHumanMergeApproval(executionId: string, pullRequest
 
   const action = `pr.merge:${pullRequestNumber}`;
   const resourceId = String(pullRequestNumber);
+  const reviewedHead = (independent.payload as Record<string, unknown>).headSha;
+  if (typeof reviewedHead !== 'string') throw new MergePolicyError('A commit-bound independent review is required.', 'merge.review_head_missing', 409);
+  const requests = await prisma.auditEvent.findMany({ where: { executionId, eventType: 'merge.approval.requested' } });
   const existing = execution.task.approvals.find(
     (approval) =>
       approval.executionId === executionId &&
       approval.action === action &&
       approval.resourceType === 'github.pull_request' &&
       approval.resourceId === resourceId &&
-      (approval.status === 'PENDING' || approval.status === 'APPROVED'),
+      (approval.status === 'PENDING' || approval.status === 'APPROVED') &&
+      requests.some(event => { const p = event.payload as Record<string, unknown>; return p.approvalId === approval.id && p.headSha === reviewedHead; }),
   );
   if (existing) return existing;
 
@@ -132,11 +137,13 @@ export async function requestHumanMergeApproval(executionId: string, pullRequest
     data: {
       taskId: execution.taskId,
       executionId,
-      eventType: 'approval.requested',
+      eventType: 'merge.approval.requested',
       actorType: 'system',
       actorId: 'gitagent',
       payload: {
         approvalId: approval.id,
+        executionId,
+        headSha: reviewedHead,
         action,
         resourceType: approval.resourceType,
         resourceId,
@@ -281,6 +288,9 @@ export async function executeApprovedMerge(approvalId: string, executionId?: str
   if (approval.executionId !== resolvedExecutionId) {
     throw new MergePolicyError('Approval does not belong to this execution.', 'merge.approval_execution_mismatch', 409);
   }
+  if (approval.resourceType !== 'github.pull_request' || approval.resourceId !== String(resolvedPullRequestNumber) || approval.action !== `pr.merge:${resolvedPullRequestNumber}`) {
+    throw new MergePolicyError('Approval does not match this pull request.', 'merge.approval_resource_mismatch', 409);
+  }
   if (approval.status !== 'APPROVED' || !approval.actorId) {
     throw new MergePolicyError('Human approval is required before merge.', 'merge.human_approval_required', 409);
   }
@@ -349,6 +359,7 @@ export async function executeApprovedMerge(approvalId: string, executionId?: str
     state?: string;
     merged?: boolean;
     merge_commit_sha?: string | null;
+    head: { sha: string };
   };
 
   if (prState.merged) {
@@ -389,6 +400,19 @@ export async function executeApprovedMerge(approvalId: string, executionId?: str
     throw new MergePolicyError('Pull request is not mergeable.', 'merge.pr_not_mergeable', 409);
   }
 
+  const requestEvents = await prisma.auditEvent.findMany({ where: { executionId: resolvedExecutionId, eventType: 'merge.approval.requested' } });
+  const humanDecisionMatchesHead = requestEvents.some(event => { const p = event.payload as Record<string, unknown>; return p.approvalId === approval.id && p.headSha === prState.head.sha; });
+  if (!humanDecisionMatchesHead) throw new MergePolicyError('Human approval must cover the current reviewed commit.', 'merge.human_approval_head_mismatch', 409);
+  if (!reviewMatchesHead(independent.payload, prState.head.sha)) {
+    throw new MergePolicyError('Independent review must approve the current PR commit.', 'merge.review_head_mismatch', 409);
+  }
+
+  const security = await prisma.auditEvent.findFirst({ where: { executionId: resolvedExecutionId, eventType: 'security.suite.completed' }, orderBy: { createdAt: 'desc' } });
+  const securityPayload = security?.payload as Record<string, unknown> | undefined;
+  if (!securityPayload || securityPayload.passed !== true || securityPayload.headSha !== prState.head.sha || securityPayload.pullRequestNumber !== resolvedPullRequestNumber) {
+    throw new MergePolicyError('Execution security checks must pass for the current commit.', 'merge.security_checks_required', 409);
+  }
+
   const mergeResponse = await fetch(`${API}/repos/${repo.owner}/${repo.name}/pulls/${resolvedPullRequestNumber}/merge`, {
     method: 'PUT',
     headers: {
@@ -398,7 +422,7 @@ export async function executeApprovedMerge(approvalId: string, executionId?: str
       'User-Agent': 'GitAgent-Control',
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({ merge_method: 'squash' }),
+    body: JSON.stringify({ merge_method: 'squash', sha: prState.head.sha }),
   });
   const mergeBody = (await mergeResponse.json()) as { merged?: boolean; sha?: string; message?: string };
   if (!mergeResponse.ok || !mergeBody.merged) {

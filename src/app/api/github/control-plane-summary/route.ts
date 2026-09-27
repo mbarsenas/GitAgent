@@ -1,11 +1,13 @@
+import { requireCurrentUser } from '@/lib/auth/current-user';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { getAgentTrustState } from '@/lib/github/trust-lifecycle';
 
 export async function GET() {
   try {
+    const session = await requireCurrentUser();
     const repo = await prisma.repository.findFirst({
-      where: { provider: 'github', externalId: '1373462743' },
+      where: { userId: session.userId, provider: 'github', externalId: '1373462743' },
     });
     if (!repo) throw new Error('Canonical repository missing.');
 

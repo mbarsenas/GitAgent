@@ -1,9 +1,11 @@
+import { requireCurrentUser } from '@/lib/auth/current-user';
 import { NextResponse } from 'next/server';
 import { reconcileLegacyApprovalProvenance } from '@/lib/governance/approval-reconciliation';
 
 export async function POST() {
   try {
-    const result = await reconcileLegacyApprovalProvenance();
+    const session = await requireCurrentUser();
+    const result = await reconcileLegacyApprovalProvenance(session.userId);
     return NextResponse.json({ ok: true, ...result });
   } catch (error) {
     return NextResponse.json(

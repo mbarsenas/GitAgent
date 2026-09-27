@@ -201,9 +201,10 @@ async function reconcileMergeApproval(
   });
 }
 
-export async function reconcileLegacyApprovalProvenance() {
+export async function reconcileLegacyApprovalProvenance(userId: string) {
   const legacy = await prisma.approval.findMany({
     where: {
+      task: { repository: { userId } },
       OR: [{ executionId: null }, { resourceType: null }, { resourceId: null }],
     },
     orderBy: { requestedAt: 'asc' },

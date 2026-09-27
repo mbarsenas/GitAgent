@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { ControlPlaneShell } from '@/app/components/control-plane-shell';
 
-type Option = { id: string; name?: string; slug?: string; email?: string; owner?: string };
+type Option = { id: string; name?: string; slug?: string; email?: string; owner?: string; repositoryId?: string };
 type TaskBootstrap = { repositories: Option[]; agents: Option[]; users: Option[] };
 type AgentRunResult = {
   status?: string;
@@ -21,6 +21,7 @@ type CreateTaskResult = {
 export default function NewTaskPage() {
   const [bootstrap, setBootstrap] = useState<TaskBootstrap>({ repositories: [], agents: [], users: [] });
   const [result, setResult] = useState<CreateTaskResult | null>(null);
+  const [repositoryId, setRepositoryId] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -30,6 +31,7 @@ export default function NewTaskPage() {
         const body = await response.json().catch(() => ({}));
         if (!response.ok) throw new Error(body.error ?? 'Failed to load task options');
         setBootstrap(body);
+        setRepositoryId(body.repositories?.[0]?.id ?? '');
       })
       .catch((error) => setError(error.message));
   }, []);
@@ -61,7 +63,7 @@ export default function NewTaskPage() {
       });
 
       const responseText = await response.text();
-      let body: { taskId?: string; executionId?: string; error?: string } = {};
+      let body: { taskId?: string; executionId?: string; status?: string; error?: string } = {};
       try {
         body = responseText ? JSON.parse(responseText) : {};
       } catch {
@@ -70,6 +72,11 @@ export default function NewTaskPage() {
       if (!response.ok) throw new Error(body.error ?? `Task creation failed (HTTP ${response.status})`);
       if (!body.taskId || !body.executionId) throw new Error('Task creation returned no task or execution ID.');
 
+      setResult({ taskId: body.taskId, executionId: body.executionId });
+      if (body.status === 'WAITING_APPROVAL') {
+        setResult({ taskId: body.taskId, executionId: body.executionId, run: { status: 'REQUIRES_EXECUTION_APPROVAL' } });
+        return;
+      }
       const runResponse = await fetch('/api/agent/run', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
@@ -137,7 +144,7 @@ export default function NewTaskPage() {
           <div className="form-grid form-grid-three">
             <label>
               <span className="label">Repository</span>
-              <select name="repositoryId" required style={{ width: '100%', marginTop: 6 }} disabled={bootstrap.repositories.length === 0}>
+              <select name="repositoryId" value={repositoryId} onChange={e => setRepositoryId(e.target.value)} required style={{ width: '100%', marginTop: 6 }} disabled={bootstrap.repositories.length === 0}>
                 {bootstrap.repositories.length === 0 ? (
                   <option value="">No connected repositories</option>
                 ) : bootstrap.repositories.map((repo) => (
@@ -150,7 +157,7 @@ export default function NewTaskPage() {
             <label>
               <span className="label">Implementation agent</span>
               <select name="agentId" required style={{ width: '100%', marginTop: 6 }}>
-                {bootstrap.agents.map((agent) => (
+                {bootstrap.agents.filter(agent => agent.repositoryId === repositoryId).map((agent) => (
                   <option key={agent.id} value={agent.id}>{agent.name ?? agent.slug}</option>
                 ))}
               </select>
@@ -186,12 +193,12 @@ export default function NewTaskPage() {
           </div>
 
           <label style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-            <input name="requiresHumanApproval" type="checkbox" defaultChecked />
+            <input name="requiresHumanApproval" type="checkbox" checked readOnly />
             <span>Require human approval for sensitive transitions</span>
           </label>
 
           <div>
-            <button className="solid-button" disabled={loading || bootstrap.repositories.length === 0} type="submit">
+            <button className="solid-button" disabled={loading || !repositoryId || !bootstrap.agents.some(agent => agent.repositoryId === repositoryId)} type="submit">
               {loading ? 'GitAgent is inspecting the repository…' : 'Start GitAgent'}
             </button>
           </div>
@@ -202,9 +209,10 @@ export default function NewTaskPage() {
           {error && <p style={{ color: 'var(--danger)' }}>{error}</p>}
           {result && (
             <div style={{ borderTop: '1px solid var(--border)', paddingTop: 16, display: 'grid', gap: 8 }}>
-              <strong>GitAgent execution started.</strong>
+              <strong>{loading ? 'GitAgent is working on your task.' : result.run?.status === 'WAITING_APPROVAL' ? 'Pull request ready for your review.' : 'Task created. Open the execution for its current status.'}</strong>
               <p className="mono muted" style={{ margin: 0 }}>task: {result.taskId}</p>
               <p className="mono muted" style={{ margin: 0 }}>execution: {result.executionId}</p>
+              {result.run?.status === 'REQUIRES_EXECUTION_APPROVAL' && <p>This restricted agent needs your approval before starting. <a className="text-link" href="/approvals">Review approval →</a></p>}
               {result.run?.inspectedFiles?.length ? (
                 <p className="muted" style={{ margin: 0 }}>Inspected {result.run.inspectedFiles.length} repository files.</p>
               ) : null}

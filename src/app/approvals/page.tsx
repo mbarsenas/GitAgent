@@ -87,6 +87,10 @@ export default function ApprovalsPage() {
       });
       const body = await response.json();
       if (!response.ok) throw new Error(body.error ?? 'Approval decision failed.');
+      if (!isMerge && decision === 'APPROVE' && approval.action === 'restricted.execute') {
+        const resumed = await fetch('/api/github/resume-restricted', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ taskId: approval.task.id }) });
+        if (!resumed.ok) throw new Error('Approval recorded, but execution could not start. Open the execution to inspect its status.');
+      }
       setNotice(`${decision} recorded for ${approval.action}.`);
       await refresh();
     } catch (e) {

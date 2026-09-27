@@ -1,11 +1,15 @@
+import { requireCurrentUser } from '@/lib/auth/current-user';
+import { requireOwnedExecution } from '@/lib/auth/tenant-ownership';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { attemptMergeAsAgent, requestHumanMergeApproval } from '@/lib/github/merge-boundary';
 
 export async function POST(request: Request) {
   try {
+    const session = await requireCurrentUser();
     const { executionId, pullRequestNumber } = await request.json();
     if (!executionId || !pullRequestNumber) return NextResponse.json({ ok: false, error: 'executionId and pullRequestNumber are required.' }, { status: 400 });
+    await requireOwnedExecution(executionId, session.userId);
     const execution = await prisma.execution.findUnique({ where: { id: executionId } });
     if (!execution) return NextResponse.json({ ok: false, error: 'Execution not found.' }, { status: 404 });
     const reviewer = await prisma.agent.findFirst({ where: { id: { not: execution.agentId }, status: 'ACTIVE', grants: { some: { capability: 'review.approve', effect: 'ALLOW' } } } });
