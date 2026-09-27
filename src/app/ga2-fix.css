@@ -396,6 +396,7 @@
     height: 64px;
   }
   .ga2-nav nav > a:not(.ga2-account) { display: none; }
+  .ga2-nav nav > a:not(.ga2-account).ga2-pricing { display: inline-flex; padding: 9px 10px; font-size: 12px; white-space: nowrap; }
   .ga2-hero { width: calc(100% - 28px); padding: 32px 0 48px; }
   .ga2-actions { flex-direction: column; }
   .ga2-primary,

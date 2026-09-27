@@ -352,3 +352,18 @@ h2 { font-size: 13px; }
 .step-card strong { font-size: 10px; }
 .panel-head h2 { font-size: 12px; }
 @media (max-width: 600px) { .client-hero h1 { font-size: 17px; } }
+
+
+.pricing-hero { padding: 52px 0 30px; }
+.pricing-hero h1 { font-size: 24px; line-height: 1.2; letter-spacing: -.025em; }
+.pricing-hero > p:last-child { font-size: 12px; }
+.pricing-current { width: min(620px, calc(100% - 48px)); margin: 0 auto; }
+.pricing-current .pricing-card { min-height: 0; gap: 22px; padding: 22px; }
+.pricing-current .pricing-card h2 { font-size: 16px; margin: 10px 0; }
+.pricing-current .pricing-description, .pricing-current .pricing-card ul { font-size: 11px; }
+.pricing-current .pricing-card ul { display: grid; gap: 8px; margin: 16px 0 22px; }
+.pricing-current .pricing-cta { min-height: 40px; font-size: 11px; }
+.pricing-note { margin-top: 32px; padding: 22px; }
+.pricing-note h2 { font-size: 15px; }
+.pricing-note p { font-size: 11px; }
+@media(max-width:640px) { .pricing-hero { padding-top: 40px; } .pricing-hero h1 { font-size: 20px; } .pricing-current { width: calc(100% - 28px); } }
