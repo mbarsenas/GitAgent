@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { getAgentTrustState } from '@/lib/github/trust-lifecycle';
+import { isExactIndependentApproval, outcomeEventTypes } from '@/lib/github/readiness-evidence';
 
 const POLICY_VERSION = '2026-09-16.1';
 
@@ -14,8 +15,23 @@ export async function GET() {
       where: { provider: 'github', owner: 'mbarsenas', name: 'GitAgent' },
     });
     const canonical = repositories.find((repository) => repository.externalId === '1373462743');
-    const implementation = await prisma.agent.findUnique({ where: { slug: 'demo-implementation-agent' } });
-    const review = await prisma.agent.findUnique({ where: { slug: 'demo-review-agent' } });
+    if (!canonical) throw new Error('Canonical repository missing.');
+    const latestExecution = await prisma.execution.findFirst({
+      where: { task: { repositoryId: canonical.id } },
+      orderBy: { createdAt: 'desc' },
+      include: { agent: true },
+    });
+    const latestReview = latestExecution
+      ? await prisma.auditEvent.findFirst({
+          where: { executionId: latestExecution.id, eventType: 'github.review.approved' },
+          orderBy: { createdAt: 'desc' },
+        })
+      : null;
+    const implementation = latestExecution?.agent ?? await prisma.agent.findUnique({ where: { slug: 'demo-implementation-agent' } });
+    const review = await prisma.agent.findUnique({
+      where: latestReview?.actorId ? { id: latestReview.actorId } : { slug: 'demo-review-agent' },
+    });
+    const repositoryScope = { task: { repositoryId: canonical.id } };
     if (!canonical || !implementation || !review) {
       throw new Error('Canonical repository or control-plane agents missing.');
     }
@@ -36,11 +52,12 @@ export async function GET() {
       reconciledEvents,
     ] = await Promise.all([
       getAgentTrustState(implementation.id),
-      prisma.auditEvent.findFirst({ where: { eventType: 'security.suite.completed' }, orderBy: { createdAt: 'desc' } }),
-      prisma.auditEvent.count({ where: { eventType: 'policy.merge.denied' } }),
-      prisma.auditEvent.count({ where: { eventType: 'policy.review.denied' } }),
+      prisma.auditEvent.findFirst({ where: { ...repositoryScope, eventType: 'security.suite.completed' }, orderBy: { createdAt: 'desc' } }),
+      prisma.auditEvent.count({ where: { ...repositoryScope, eventType: 'policy.merge.denied' } }),
+      prisma.auditEvent.count({ where: { ...repositoryScope, eventType: 'policy.review.denied' } }),
       prisma.auditEvent.findMany({
-        where: { eventType: 'github.review.approved', actorId: review.id },
+        where: { ...repositoryScope, eventType: 'github.review.approved' },
+        include: { execution: { select: { id: true, agentId: true, taskId: true } } },
         orderBy: { createdAt: 'desc' },
         take: 100,
       }),
@@ -59,10 +76,10 @@ export async function GET() {
         orderBy: { createdAt: 'desc' },
         take: 100,
       }),
-      prisma.auditEvent.count({ where: { eventType: 'execution.completed', actorId: implementation.id } }),
-      prisma.auditEvent.count({ where: { eventType: 'execution.failed', actorId: implementation.id } }),
-      prisma.auditEvent.findMany({ where: { eventType: 'github.pr.merged' }, orderBy: { createdAt: 'desc' }, take: 100 }),
-      prisma.auditEvent.findMany({ where: { eventType: 'workspace.sealed' }, orderBy: { createdAt: 'desc' }, take: 100 }),
+      prisma.execution.count({ where: { ...repositoryScope, auditEvents: { some: { eventType: { in: outcomeEventTypes.completed } } } } }),
+      prisma.execution.count({ where: { ...repositoryScope, auditEvents: { some: { eventType: { in: outcomeEventTypes.failed } } } } }),
+      prisma.auditEvent.findMany({ where: { ...repositoryScope, eventType: 'github.pr.merged' }, orderBy: { createdAt: 'desc' }, take: 100 }),
+      prisma.auditEvent.findMany({ where: { ...repositoryScope, eventType: 'workspace.sealed' }, orderBy: { createdAt: 'desc' }, take: 100 }),
       prisma.auditEvent.findMany({
         where: { eventType: 'approval.provenance.reconciled', task: { repositoryId: canonical.id } },
         orderBy: { createdAt: 'desc' },
@@ -71,15 +88,7 @@ export async function GET() {
     ]);
 
     const securityPayload = payloadRecord(securityRun?.payload);
-    const exactApprovals = reviewApproved.filter((event) => {
-      const payload = payloadRecord(event.payload);
-      return (
-        payload.reviewGitHubApp === 'gitagent-review' &&
-        typeof payload.pullRequestNumber === 'number' &&
-        payload.reviewerAgentId === review.id &&
-        payload.implementationAgentId === implementation.id
-      );
-    });
+    const exactApprovals = reviewApproved.filter(isExactIndependentApproval);
 
     const approvalHasExactBinding = (approval: (typeof pendingApprovals)[number]) => {
       if (!approval.executionId || !approval.resourceType || !approval.resourceId) return false;
