@@ -1,3 +1,4 @@
+import { requireCurrentUser } from '@/lib/auth/current-user';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { getAgentTrustState } from '@/lib/github/trust-lifecycle';
@@ -11,8 +12,9 @@ function payloadRecord(payload: unknown) {
 
 export async function GET() {
   try {
+    const session = await requireCurrentUser();
     const repositories = await prisma.repository.findMany({
-      where: { provider: 'github', owner: 'mbarsenas', name: 'GitAgent' },
+      where: { userId: session.userId, provider: 'github', owner: 'mbarsenas', name: 'GitAgent' },
     });
     const canonical = repositories.find((repository) => repository.externalId === '1373462743');
     if (!canonical) throw new Error('Canonical repository missing.');
@@ -32,6 +34,7 @@ export async function GET() {
       where: latestReview?.actorId ? { id: latestReview.actorId } : { slug: 'demo-review-agent' },
     });
     const repositoryScope = { task: { repositoryId: canonical.id } };
+    const auditScope = { OR: [repositoryScope, { execution: repositoryScope }] };
     if (!canonical || !implementation || !review) {
       throw new Error('Canonical repository or control-plane agents missing.');
     }
@@ -52,11 +55,11 @@ export async function GET() {
       reconciledEvents,
     ] = await Promise.all([
       getAgentTrustState(implementation.id),
-      prisma.auditEvent.findFirst({ where: { ...repositoryScope, eventType: 'security.suite.completed' }, orderBy: { createdAt: 'desc' } }),
-      prisma.auditEvent.count({ where: { ...repositoryScope, eventType: 'policy.merge.denied' } }),
-      prisma.auditEvent.count({ where: { ...repositoryScope, eventType: 'policy.review.denied' } }),
+      prisma.auditEvent.findFirst({ where: { ...auditScope, eventType: 'security.suite.completed' }, orderBy: { createdAt: 'desc' } }),
+      prisma.auditEvent.count({ where: { ...auditScope, eventType: 'policy.merge.denied' } }),
+      prisma.auditEvent.count({ where: { ...auditScope, eventType: 'policy.review.denied' } }),
       prisma.auditEvent.findMany({
-        where: { ...repositoryScope, eventType: 'github.review.approved' },
+        where: { ...auditScope, eventType: 'github.review.approved' },
         include: { execution: { select: { id: true, agentId: true, taskId: true } } },
         orderBy: { createdAt: 'desc' },
         take: 100,
@@ -78,8 +81,8 @@ export async function GET() {
       }),
       prisma.execution.count({ where: { ...repositoryScope, auditEvents: { some: { eventType: { in: outcomeEventTypes.completed } } } } }),
       prisma.execution.count({ where: { ...repositoryScope, auditEvents: { some: { eventType: { in: outcomeEventTypes.failed } } } } }),
-      prisma.auditEvent.findMany({ where: { ...repositoryScope, eventType: 'github.pr.merged' }, orderBy: { createdAt: 'desc' }, take: 100 }),
-      prisma.auditEvent.findMany({ where: { ...repositoryScope, eventType: 'workspace.sealed' }, orderBy: { createdAt: 'desc' }, take: 100 }),
+      prisma.auditEvent.findMany({ where: { ...auditScope, eventType: 'github.pr.merged' }, orderBy: { createdAt: 'desc' }, take: 100 }),
+      prisma.auditEvent.findMany({ where: { ...auditScope, eventType: 'workspace.sealed' }, orderBy: { createdAt: 'desc' }, take: 100 }),
       prisma.auditEvent.findMany({
         where: { eventType: 'approval.provenance.reconciled', task: { repositoryId: canonical.id } },
         orderBy: { createdAt: 'desc' },

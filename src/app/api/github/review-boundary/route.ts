@@ -1,8 +1,11 @@
+import { requireCurrentUser } from '@/lib/auth/current-user';
+import { requireOwnedExecution } from '@/lib/auth/tenant-ownership';
 import { NextRequest, NextResponse } from 'next/server';
 import { attemptPullRequestApproval } from '@/lib/github/review-boundary';
 
 export async function POST(request: NextRequest) {
   try {
+    const session = await requireCurrentUser();
     const body = (await request.json()) as {
       executionId?: string;
       pullRequestNumber?: number;
@@ -16,6 +19,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    await requireOwnedExecution(body.executionId, session.userId);
     const result = await attemptPullRequestApproval(
       body.executionId,
       body.pullRequestNumber,

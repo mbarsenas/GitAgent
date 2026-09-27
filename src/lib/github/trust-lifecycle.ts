@@ -12,7 +12,7 @@ function trustStateFromPayload(payload: unknown): TrustState | null {
 
 async function trustEvents(agentId: string) {
   const events = await prisma.auditEvent.findMany({
-    where: { eventType: 'agent.trust.changed' },
+    where: { eventType: 'agent.trust.changed', OR: [{ payload: { path: ['subjectAgentId'], equals: agentId } }, { actorId: agentId }] },
     orderBy: { createdAt: 'desc' },
     take: 200,
   });

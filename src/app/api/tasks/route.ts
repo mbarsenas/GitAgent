@@ -1,3 +1,5 @@
+import { getAgentTrustState } from '@/lib/github/trust-lifecycle';
+import { codingCapabilities, validateTaskInput } from '@/lib/tasks/task-input';
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { requireCurrentUser } from '@/lib/auth/current-user';
@@ -7,13 +9,14 @@ export async function POST(request: Request) {
   try {
     const session = await requireCurrentUser();
     const body = await request.json();
+    const validated = validateTaskInput(body);
 
     const repository = await prisma.repository.findFirst({
       where: { id: body.repositoryId, userId: session.userId, provider: 'github' },
     });
-    const agent = await prisma.agent.findUnique({ where: { id: body.agentId } });
+    const agent = await prisma.agent.findUnique({ where: { id: body.agentId }, include: { grants: { where: { capability: 'review.approve', effect: 'ALLOW' } } } });
 
-    if (!repository || !agent) {
+    if (!repository || !agent || agent.status !== 'ACTIVE' || agent.repositoryId !== repository.id || agent.grants.length > 0) {
       return NextResponse.json({ error: 'Repository or agent not found for this account.' }, { status: 400 });
     }
 
@@ -25,16 +28,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Repository owner does not have a GitHub App installation connected.' }, { status: 409 });
     }
 
+    const trust = await getAgentTrustState(agent.id);
+    if (trust === 'QUARANTINED') return NextResponse.json({ error: 'This agent is quarantined. Review its trust status before starting work.' }, { status: 409 });
     const result = await createGovernedTask({
+      restricted: trust === 'RESTRICTED',
       repositoryId: repository.id,
       agentId: agent.id,
       initiatorId: session.userId,
-      title: body.title,
-      goal: body.goal,
-      maxCostUsd: Number(body.maxCostUsd ?? 1),
-      maxTokens: Number(body.maxTokens ?? 20000),
-      requiresHumanApproval: body.requiresHumanApproval ?? true,
-      capabilities: body.capabilities ?? ['branch.create', 'code.write', 'test.execute', 'pr.create'],
+      ...validated,
+      requiresHumanApproval: true,
+      capabilities: body.capabilities ?? codingCapabilities,
       policyVersion: body.policyVersion ?? '2026-09-16.1',
       expiresAt: body.expiresAt ? new Date(body.expiresAt) : undefined,
     });
@@ -47,9 +50,9 @@ export async function POST(request: Request) {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error('POST /api/tasks failed', error);
-    const status = message === 'UNAUTHENTICATED' ? 401 : 500;
+    const status = message === 'UNAUTHENTICATED' ? 401 : message.startsWith('INVALID_TASK_') ? 400 : 500;
     return NextResponse.json(
-      { error: status === 401 ? 'Sign in is required.' : message, code: status === 401 ? 'unauthenticated' : 'task_creation_failed' },
+      { error: status === 401 ? 'Sign in is required.' : status === 400 ? 'Check the task details, budget, and requested permissions.' : 'Unable to process this task request.', code: status === 401 ? 'unauthenticated' : 'task_creation_failed' },
       { status },
     );
   }
@@ -63,17 +66,17 @@ export async function GET() {
         where: { provider: 'github', userId: session.userId },
         orderBy: [{ owner: 'asc' }, { name: 'asc' }],
       }),
-      prisma.agent.findMany({ where: { status: 'ACTIVE' }, orderBy: { name: 'asc' } }),
-      prisma.user.findUnique({ where: { id: session.userId } }),
+      prisma.agent.findMany({ where: { status: 'ACTIVE', repository: { userId: session.userId }, grants: { none: { capability: 'review.approve', effect: 'ALLOW' } } }, orderBy: { name: 'asc' } }),
+      prisma.user.findUnique({ where: { id: session.userId }, select: { id: true, name: true, email: true } }),
     ]);
 
     return NextResponse.json({ repositories, agents, users: user ? [user] : [] });
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error('GET /api/tasks failed', error);
-    const status = message === 'UNAUTHENTICATED' ? 401 : 500;
+    const status = message === 'UNAUTHENTICATED' ? 401 : message.startsWith('INVALID_TASK_') ? 400 : 500;
     return NextResponse.json(
-      { error: status === 401 ? 'Sign in is required.' : message, code: status === 401 ? 'unauthenticated' : 'task_bootstrap_failed' },
+      { error: status === 401 ? 'Sign in is required.' : status === 400 ? 'Check the task details, budget, and requested permissions.' : 'Unable to process this task request.', code: status === 401 ? 'unauthenticated' : 'task_bootstrap_failed' },
       { status },
     );
   }

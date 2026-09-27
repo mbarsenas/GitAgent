@@ -1,3 +1,5 @@
+import { reviewPullRequestDiff } from './independent-review';
+import { requireCompleteDiff, reviewMatchesHead } from './review-verdict';
 import { prisma } from '@/lib/db/prisma';
 import { createReviewInstallationToken, isReviewAppConfigured } from './review-auth';
 
@@ -41,6 +43,7 @@ async function findExactEvent(
   actorAgentId: string,
   eventType: string,
   pullRequestNumber: number,
+  headSha?: string,
 ) {
   const events = await prisma.auditEvent.findMany({
     where: { executionId, actorId: actorAgentId, eventType },
@@ -48,7 +51,7 @@ async function findExactEvent(
     take: 50,
   });
 
-  return events.find((event) => payloadMatchesPr(event.payload, pullRequestNumber));
+  return events.find((event) => payloadMatchesPr(event.payload, pullRequestNumber) && (!headSha || reviewMatchesHead(event.payload, headSha)));
 }
 
 async function auditReviewDeny(input: {
@@ -86,7 +89,7 @@ export async function performPullRequestReview(
 ) {
   const execution = await prisma.execution.findUnique({
     where: { id: executionId },
-    include: { task: { include: { repository: true } }, agent: true },
+    include: { task: { include: { repository: true } }, agent: true, workspace: true },
   });
   if (!execution) throw new Error('Execution not found.');
 
@@ -157,15 +160,24 @@ export async function performPullRequestReview(
 
   if (!isReviewAppConfigured()) {
     return {
-      allowed: true as const,
-      decision: 'ALLOW' as const,
+      allowed: false as const,
+      decision: 'DENY' as const,
       reasonCode: 'policy.review_app_not_configured',
       githubRequestSent: false,
     };
   }
 
+  const creation = await prisma.auditEvent.findMany({ where: { executionId, eventType: 'github.pr.created' } });
+  if (!creation.some(e => payloadMatchesPr(e.payload, pullRequestNumber))) throw new Error('Pull request is not bound to this execution.');
+  const installation = await createReviewInstallationToken(repo.owner, repo.name);
+  const prUrl = `${API}/repos/${repo.owner}/${repo.name}/pulls/${pullRequestNumber}`;
+  const pr = await github<{ state: string; head: { sha: string; ref: string; repo: { full_name: string } | null }; changed_files: number }>(prUrl, installation.token);
+  if (pr.state !== 'open' || pr.head.ref !== execution.workspace?.branch || pr.head.repo?.full_name.toLowerCase() !== repository.toLowerCase()) {
+    throw new Error('Pull request does not match the active execution branch.');
+  }
+  const headSha = pr.head.sha;
   const eventType = action === 'REVIEW' ? 'github.review.created' : 'github.review.approved';
-  const prior = await findExactEvent(executionId, actorAgentId, eventType, pullRequestNumber);
+  const prior = await findExactEvent(executionId, actorAgentId, eventType, pullRequestNumber, headSha);
   if (prior) {
     const payload = prior.payload as Record<string, unknown>;
     return {
@@ -193,6 +205,7 @@ export async function performPullRequestReview(
       actorAgentId,
       'github.review.created',
       pullRequestNumber,
+      headSha,
     );
     if (!review) {
       await auditReviewDeny({
@@ -212,7 +225,25 @@ export async function performPullRequestReview(
     }
   }
 
-  const installation = await createReviewInstallationToken(repo.owner, repo.name);
+  let reviewSummary = 'Independent review approved this exact commit.';
+  let reviewVerdict = 'APPROVE';
+  if (action === 'REVIEW') {
+    const files: Array<{ filename: string; patch?: string }> = [];
+    if (pr.changed_files > 100) throw new Error('Pull request is too large for independent review.');
+    files.push(...await github<Array<{ filename: string; patch?: string }>>(`${prUrl}/files?per_page=100`, installation.token));
+    requireCompleteDiff(files, pr.changed_files);
+    const verdict = await reviewPullRequestDiff({ goal: execution.task.goal, repository, headSha, files });
+    reviewSummary = [verdict.summary, ...verdict.findings].join('\n\n');
+    reviewVerdict = verdict.verdict;
+    if (reviewVerdict !== 'APPROVE') {
+      await prisma.auditEvent.create({ data: { taskId: execution.taskId, executionId,
+        eventType: 'github.review.changes_requested', actorType: 'agent', actorId: actorAgentId,
+        payload: { repository, pullRequestNumber, headSha, reviewVerdict, summary: reviewSummary, policyVersion: POLICY_VERSION } } });
+      return { allowed: false as const, decision: 'DENY' as const, reasonCode: 'policy.independent_review_changes_requested', githubRequestSent: false };
+    }
+  }
+  const current = await github<{ head: { sha: string } }>(prUrl, installation.token);
+  if (current.head.sha !== headSha) throw new Error('Pull request changed during review; review the new commit.');
   const event = action === 'REVIEW' ? 'COMMENT' : 'APPROVE';
   const result = await github<{ id: number; state: string; html_url: string }>(
     `${API}/repos/${repo.owner}/${repo.name}/pulls/${pullRequestNumber}/reviews`,
@@ -221,13 +252,16 @@ export async function performPullRequestReview(
       method: 'POST',
       body: JSON.stringify({
         event,
+        commit_id: headSha,
         body:
           action === 'REVIEW'
-            ? `GitAgent independent review by ${reviewer.name} (${reviewer.id}).`
-            : `GitAgent independent approval by ${reviewer.name} (${reviewer.id}).`,
+            ? `GitAgent independent review by ${reviewer.name} (${reviewer.id}) for ${headSha}.\n\n${reviewSummary}`
+            : `GitAgent independent approval by ${reviewer.name} (${reviewer.id}) for reviewed commit ${headSha}.`,
       }),
     },
   );
+
+  if (action === 'APPROVE' && result.state !== 'APPROVED') throw new Error('GitHub did not accept the independent approval.');
 
   const reasonCode =
     action === 'REVIEW'
@@ -244,6 +278,9 @@ export async function performPullRequestReview(
       payload: {
         repository,
         pullRequestNumber,
+        headSha,
+        reviewVerdict,
+        reviewSummary,
         githubReviewId: result.id,
         githubReviewState: result.state,
         githubReviewUrl: result.html_url,

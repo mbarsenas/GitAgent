@@ -10,6 +10,7 @@ export type CreateGovernedTaskInput = {
   maxCostUsd?: number;
   maxTokens?: number;
   requiresHumanApproval?: boolean;
+  restricted?: boolean;
   capabilities: string[];
   policyVersion: string;
   expiresAt?: Date;
@@ -19,6 +20,7 @@ export async function createGovernedTask(input: CreateGovernedTaskInput) {
   return prisma.$transaction(async (tx) => {
     const task = await tx.task.create({
       data: {
+        status: input.restricted ? 'WAITING_APPROVAL' : 'QUEUED',
         title: input.title,
         goal: input.goal,
         repositoryId: input.repositoryId,
@@ -91,6 +93,10 @@ export async function createGovernedTask(input: CreateGovernedTaskInput) {
       },
     ];
 
+    if (input.restricted) {
+      const approval = await tx.approval.create({ data: { taskId: task.id, executionId: execution.id, action: 'restricted.execute', resourceType: 'execution', resourceId: execution.id, status: 'PENDING' } });
+      auditRows.push({ taskId: task.id, executionId: execution.id, eventType: 'restricted.execution.approval_requested', actorType: 'system', actorId: 'gitagent', payload: { approvalId: approval.id, executionId: execution.id, resourceType: 'execution', resourceId: execution.id, policyVersion: input.policyVersion } });
+    }
     await tx.auditEvent.createMany({ data: auditRows });
     return { task, execution };
   });

@@ -1,3 +1,4 @@
+import { verifyExecutionBoundaries } from '@/lib/github/security-suite';
 import { prisma } from '@/lib/db/prisma';
 import { createGovernedBranch } from '@/lib/github/governed-branch';
 import { createGovernedChange } from '@/lib/github/governed-change';
@@ -99,17 +100,21 @@ export async function runRepositoryAgent(executionId: string) {
   const { task, agent } = execution;
   const repo = task.repository;
   const fullName = `${repo.owner}/${repo.name}`;
-  if (task.agentId !== agent.id) throw new Error('Execution agent is not assigned to this task.');
-  if (!repo.user?.githubInstallationId) throw new Error('Repository owner does not have a GitHub App installation connected.');
-
-  const trust = await getAgentTrustState(agent.id);
-  if (trust === 'QUARANTINED') throw new Error('Policy denied execution: agent is QUARANTINED.');
-  if (trust === 'RESTRICTED' && !task.approvals.some((approval) => approval.action === 'restricted.execute' && approval.status === 'APPROVED' && approval.executionId === execution.id)) throw new Error('Policy denied execution: RESTRICTED agent lacks execution-bound human approval.');
-
-  await prisma.execution.update({ where: { id: execution.id }, data: { status: 'RUNNING', startedAt: execution.startedAt ?? new Date() } });
-  await prisma.auditEvent.create({ data: { taskId: task.id, executionId, eventType: 'agent.execution.started', actorType: 'agent', actorId: agent.id, payload: { goal: task.goal, repository: fullName, policyVersion: POLICY_VERSION } } });
+  const claimed = await prisma.execution.updateMany({
+    where: { id: executionId, status: 'CREATED' },
+    data: { status: 'RUNNING', startedAt: new Date() },
+  });
+  if (claimed.count !== 1) throw new Error('Execution has already started or finished.');
 
   try {
+    if (task.agentId !== agent.id || agent.status !== 'ACTIVE') throw new Error('Execution agent is not active and assigned to this task.');
+    if (!repo.user?.githubInstallationId) throw new Error('Repository owner does not have a GitHub App installation connected.');
+    const trust = await getAgentTrustState(agent.id);
+    if (trust === 'QUARANTINED') throw new Error('Policy denied execution: agent is QUARANTINED.');
+    if (trust === 'RESTRICTED' && !task.approvals.some(a => a.action === 'restricted.execute' && a.status === 'APPROVED' && a.executionId === execution.id)) throw new Error('Policy denied execution: RESTRICTED agent lacks execution-bound human approval.');
+    if (!isImplementationLlmConfigured()) throw new Error('Implementation model is not configured.');
+    await prisma.task.update({ where: { id: task.id }, data: { status: 'RUNNING' } });
+    await prisma.auditEvent.create({ data: { taskId: task.id, executionId, eventType: 'agent.execution.started', actorType: 'agent', actorId: agent.id, payload: { goal: task.goal, repository: fullName, policyVersion: POLICY_VERSION } } });
     const readGrant = await requireGrant(agent.id, 'repo.read', repo.id, fullName, task.id, execution.id);
     const installation = await createInstallationToken(repo.user.githubInstallationId);
     const tree = await github<{ tree: RepoFile[] }>(`${API}/repos/${repo.owner}/${repo.name}/git/trees/${encodeURIComponent(repo.defaultBranch)}?recursive=1`, installation.token);
@@ -123,13 +128,6 @@ export async function runRepositoryAgent(executionId: string) {
     }
 
     await prisma.auditEvent.create({ data: { taskId: task.id, executionId, eventType: 'agent.repository.inspected', actorType: 'agent', actorId: agent.id, payload: { repository: fullName, defaultBranch: repo.defaultBranch, capabilityGrantId: readGrant.id, candidateFiles: candidates.map((file) => file.path), inspectedFiles: inspected.map((file) => file.path), policyVersion: POLICY_VERSION } } });
-
-    if (!isImplementationLlmConfigured()) {
-      await prisma.execution.update({ where: { id: execution.id }, data: { status: 'SUCCEEDED', finishedAt: new Date() } });
-      await prisma.task.update({ where: { id: task.id }, data: { status: 'WAITING_APPROVAL' } });
-      await prisma.auditEvent.create({ data: { taskId: task.id, executionId, eventType: 'agent.change_generation.blocked', actorType: 'system', actorId: 'gitagent', payload: { reasonCode: 'agent.llm_provider_not_configured', message: 'Repository inspection completed, but OPENAI_API_KEY is not configured for implementation generation.', policyVersion: POLICY_VERSION } } });
-      return { executionId, repository: fullName, inspectedFiles: inspected.map((file) => file.path), status: 'WAITING_APPROVAL' as const, blocked: true, reasonCode: 'agent.llm_provider_not_configured' };
-    }
 
     await prisma.auditEvent.create({ data: { taskId: task.id, executionId, eventType: 'agent.implementation_generation.started', actorType: 'agent', actorId: agent.id, payload: { repository: fullName, inspectedFiles: inspected.map((file) => file.path), policyVersion: POLICY_VERSION } } });
 
@@ -189,6 +187,8 @@ export async function runRepositoryAgent(executionId: string) {
     }
 
     await requestHumanMergeApproval(executionId, change.pullRequestNumber);
+    const security = await verifyExecutionBoundaries(executionId, change.pullRequestNumber);
+    if (!security.passed) throw new Error('Execution security checks failed.');
     await markReadyForHumanApproval({ taskId: task.id, executionId, repository: fullName, pullRequestNumber: change.pullRequestNumber, reviewerAgentId: reviewer.id, reviewSubmitted: true });
     return { executionId, repository: fullName, pullRequestNumber: change.pullRequestNumber, status: 'WAITING_APPROVAL' as const };
   } catch (error) {
