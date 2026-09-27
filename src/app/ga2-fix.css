@@ -407,4 +407,31 @@
   .ga2-console { transform: none; animation: none; top: 24px; }
   .marketing-features,
   .marketing-footer { width: calc(100% - 28px); }
+  .ga2-nav nav { gap: 0; }
+  .ga2-account { padding: 9px 12px; font-size: 12px; white-space: nowrap; }
+  .ga2-brand { gap: 7px; }
+  .ga2-brand strong { font-size: 17px; }
+  .ga2-brand img { width: 34px; height: 34px; }
+  .ga2-copy h1 { font-size: clamp(32px, 9vw, 44px); overflow-wrap: anywhere; }
+  .ga2-kicker { font-size: 10px; letter-spacing: .08em; }
+  .ga2-stage { min-height: 370px; }
+  .ga2-console { width: 100%; left: 0; }
+  .ga2-consolebar { padding: 0 9px; font-size: 9px; }
+  .ga2-consolebody { min-height: 0; }
+  .ga2-work { min-width: 0; padding: 10px; }
+  .ga2-boundary { gap: 5px; padding: 8px; }
+  .ga2-boundary strong { font-size: 11px; }
+  .ga2-boundary small, .ga2-boundary b { font-size: 9px; }
+  .ga2-flow { font-size: 9px; }
+  .ga2-flow i { display: none; }
+  .ga2-code { font-size: 10px; overflow-wrap: anywhere; }
+  .ga2-code > div { font-size: 9px; }
+  .ga2-review { align-items: flex-start; flex-direction: column; }
+  .ga2-review strong { font-size: 11px; }
+  .ga2-review small { font-size: 9px; }
+  .ga2-review button { font-size: 11px; }
+  .marketing-statement, .marketing-final { padding: 56px 16px; }
+  .marketing-features { padding: 32px 0; }
+  .marketing-features article { min-width: 0; }
+  .marketing-footer { display: flex; flex-wrap: wrap; gap: 12px; }
 }
