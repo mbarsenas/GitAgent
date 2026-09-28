@@ -374,3 +374,22 @@ h2 { font-size: 13px; }
 .pricing-current .pricing-card li::before { content: '✓'; flex: 0 0 auto; color: #62e7a5; font-weight: 800; }
 .pricing-current .pricing-card li::first-letter { color: inherit; }
 @media(max-width:900px) { .pricing-nav nav>a[aria-current='page'] { display: inline-flex; } }
+
+.pricing-hero { padding: 42px 0 28px; }
+.pricing-hero h1 { font-size: 24px; line-height: 1.2; }
+.pricing-hero > p:last-child { font-size: 11px; }
+.pricing-plans .pricing-card { min-height: 0; padding: 18px; gap: 20px; }
+.pricing-plans .pricing-status { margin: 6px 0; color: #8faa9d; font: 700 8px/1.3 ui-monospace,monospace; letter-spacing: .07em; }
+.pricing-plans .pricing-price { margin: 12px 0; align-items: baseline; gap: 7px; }
+.pricing-plans .pricing-price strong { font-size: 25px; }
+.pricing-plans .pricing-price span { font-size: 10px; padding-bottom: 0; }
+.pricing-plans .pricing-description { min-height: 0; margin: 8px 0; font-size: 10px; }
+.pricing-plans .pricing-card ul { margin: 12px 0 16px; gap: 7px; font-size: 10px; }
+.pricing-plans .pricing-card li { align-items: flex-start; gap: 7px; }
+.pricing-plans .pricing-card li::before { content: '✓'; flex: 0 0 auto; color: #62e7a5; font-weight: 800; }
+.pricing-plans .pricing-cta { min-height: 38px; padding: 0 10px; font-size: 10px; }
+.pricing-note { margin-top: 28px; padding: 18px; }
+.pricing-note h2 { font-size: 14px; }
+.pricing-note p { font-size: 10px; }
+@media(max-width:900px) { .pricing-plans .pricing-card { min-height: 0; } }
+@media(max-width:640px) { .pricing-hero { padding-top: 36px; } .pricing-hero h1 { font-size: 20px; } }
