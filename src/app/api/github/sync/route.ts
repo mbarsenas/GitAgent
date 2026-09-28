@@ -36,6 +36,9 @@ export async function POST() {
     });
   } catch (error) {
     const unauthenticated = error instanceof Error && error.message === 'UNAUTHENTICATED';
-    return NextResponse.json({ ok: false, error: publicError(error, 'GitHub repository sync failed.') }, { status: unauthenticated ? 401 : 500 });
+    const limit = error instanceof Error && error.message.startsWith('PLAN_REPOSITORY_LIMIT:');
+    const limitParts = limit ? error.message.split(':') : [];
+    const message = limit ? `Your ${limitParts[1]} plan includes up to ${limitParts[2]} connected repositories. Upgrade or remove repositories before syncing.` : publicError(error, 'GitHub repository sync failed.');
+    return NextResponse.json({ ok: false, error: message }, { status: unauthenticated ? 401 : limit ? 409 : 500 });
   }
 }

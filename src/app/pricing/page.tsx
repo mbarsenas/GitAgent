@@ -1,3 +1,8 @@
+import { requireCurrentUser } from '@/lib/auth/current-user';
+import { isPlanAvailable } from '@/lib/billing/stripe';
+
+export const dynamic = 'force-dynamic';
+
 const plans = [
   {
     name: 'Preview',
@@ -21,7 +26,7 @@ const plans = [
     features: [
       'Planned price: $29 per user each month',
       'Current preview capabilities included',
-      'Repository and usage limits will be published before launch',
+      'Up to 10 connected repositories per GitAgent account',
     ],
   },
   {
@@ -32,13 +37,16 @@ const plans = [
     description: 'For teams standardizing governed agent work.',
     features: [
       'Planned price: $79 per workspace each month',
-      'Shared team administration is planned',
-      'Roles, limits, and billing terms will be published before launch',
+      'Up to 50 connected repositories per GitAgent account',
+      'One shared subscription for the GitAgent account',
     ],
   },
 ];
 
-export default function PricingPage() {
+export default async function PricingPage() {
+  let signedIn = false;
+  try { await requireCurrentUser(); signedIn = true; } catch { /* Keep plan details public. */ }
+  const [proAvailable, teamAvailable] = await Promise.all([isPlanAvailable('pro'), isPlanAvailable('team')]);
   return (
     <main className="pricing-page">
       <header className="pricing-nav">
@@ -46,15 +54,14 @@ export default function PricingPage() {
         <nav>
           <a href="/">Home</a>
           <a href="/pricing" aria-current="page">Pricing</a>
-          <a href="/signin">Sign in</a>
-          <a href="/signup" className="pricing-nav-cta">Create account</a>
+          {signedIn ? <><a href="/console">Control plane</a><a href="/billing">Billing</a><a href="/api/auth/signout" className="pricing-nav-cta">Sign out</a></> : <><a href="/signin">Sign in</a><a href="/signup" className="pricing-nav-cta">Create account</a></>}
         </nav>
       </header>
 
       <section className="pricing-hero">
         <p className="pricing-kicker">GITAGENTFLOW · PRICING</p>
         <h1>Pricing for governed AI coding.</h1>
-        <p>Preview access is free while it is open. Pro and Team prices below are planned launch prices; paid subscriptions and checkout are not available yet.</p>
+        <p>Preview access is free while it is open. Pro and Team prices are available after billing setup and checkout configuration are complete.</p>
       </section>
 
       <section className="pricing-grid pricing-plans" aria-label="GitAgent plans">
@@ -62,22 +69,23 @@ export default function PricingPage() {
           <article key={plan.name} className="pricing-card">
             <div>
               <p className="pricing-plan">{plan.name}</p>
-              <p className="pricing-status">{plan.status}</p>
+              <p className="pricing-status">{plan.name === 'Preview' || (plan.name === 'Pro' ? proAvailable : plan.name === 'Team' ? teamAvailable : false) ? 'AVAILABLE' : 'PLANNED LAUNCH PRICE'}</p>
               <div className="pricing-price"><strong>{plan.price}</strong><span>{plan.cadence}</span></div>
               <p className="pricing-description">{plan.description}</p>
               <ul>{plan.features.map((feature) => <li key={feature}>{feature}</li>)}</ul>
             </div>
-            <a className="pricing-cta" href="/signup">
-              {plan.name === 'Preview' ? 'Create a preview account' : 'Join the preview'}
-              <span>→</span>
-            </a>
+          {plan.name === 'Preview'
+            ? <a className="pricing-cta" href={signedIn ? '/console' : '/signup'}>{signedIn ? 'Open control plane' : 'Create a preview account'} <span>→</span></a>
+            : signedIn && (plan.name === 'Pro' ? proAvailable : teamAvailable)
+              ? <form action="/api/billing/checkout" method="post"><input type="hidden" name="plan" value={plan.name.toLowerCase()} /><button className="pricing-cta" type="submit">Choose {plan.name} <span>→</span></button></form>
+              : <a className="pricing-cta" href={signedIn ? '/billing' : '/signup'}>{signedIn ? 'Checkout not configured' : 'Create an account'} <span>→</span></a>}
           </article>
         ))}
       </section>
 
       <section className="pricing-note">
-        <h2>Paid plans are not on sale yet</h2>
-        <p>No GitAgent subscription charges are currently processed. We’ll publish final plan limits and terms before checkout opens. Charges from your model provider, if applicable, are separate.</p>
+        <h2>Plan limits and billing</h2>
+        <p>Pro includes up to 10 connected repositories; Team includes up to 50 per GitAgent account. Paid checkout opens only when Stripe credentials, active prices, and webhook delivery are configured. Model-provider charges, if applicable, are separate.</p>
       </section>
     </main>
   );

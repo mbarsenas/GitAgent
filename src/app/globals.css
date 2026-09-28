@@ -388,6 +388,8 @@ h2 { font-size: 13px; }
 .pricing-plans .pricing-card li { align-items: flex-start; gap: 7px; }
 .pricing-plans .pricing-card li::before { content: '✓'; flex: 0 0 auto; color: #62e7a5; font-weight: 800; }
 .pricing-plans .pricing-cta { min-height: 38px; padding: 0 10px; font-size: 10px; }
+.pricing-plans .pricing-card form { margin-top: auto; }
+.pricing-plans button.pricing-cta { width: 100%; color: inherit; font-family: inherit; cursor: pointer; }
 .pricing-note { margin-top: 28px; padding: 18px; }
 .pricing-note h2 { font-size: 14px; }
 .pricing-note p { font-size: 10px; }
