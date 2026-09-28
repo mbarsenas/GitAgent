@@ -15,7 +15,7 @@ Checkout fails closed unless the Stripe secret, webhook signing secret, and pric
 
 ## Consequences
 
-The application needs a database migration and a public Stripe webhook endpoint configured for checkout completion and subscription lifecycle events. A plan change becomes effective after Stripe webhook delivery. Checkout remains unavailable until production secrets, webhook delivery, and active price records are configured. Existing model-provider charges remain separate from GitAgent subscriptions.
+The application needs a database migration and a public Stripe webhook endpoint configured for checkout completion and subscription lifecycle events. Vercel production builds apply pending Prisma migrations before building the new app version; previews and local builds do not migrate production. A plan change becomes effective after Stripe webhook delivery. Checkout remains unavailable until production secrets, webhook delivery, and active price records are configured. Existing model-provider charges remain separate from GitAgent subscriptions.
 
 ## Alternatives considered
 
