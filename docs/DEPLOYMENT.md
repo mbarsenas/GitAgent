@@ -29,9 +29,11 @@ Every production release must have a documented rollback strategy for applicatio
 
 ## Stripe subscriptions
 
+For Vercel production deployments, the build runs `prisma migrate deploy` before generating the Prisma client and building Next.js. Preview and local builds skip production migrations. A failed migration stops the production build before the new application version is deployed. The billing migration is additive, so the current application remains compatible if a later build step fails.
+
 Before enabling paid checkout in production:
 
-1. Apply the Prisma migration for `BillingSubscription` and `StripeWebhookEvent`.
+1. Verify the production deployment completed the Prisma migration for `BillingSubscription` and `StripeWebhookEvent`.
 2. Add these production environment variables in the deployment secret manager (never commit their values): `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_PRO`, `STRIPE_PRICE_TEAM`, and `NEXT_PUBLIC_APP_URL` (`https://www.gitagentflow.com`). Use a Stripe restricted API key with only the customer, price-read, subscription-read, Checkout Session, and Billing Portal permissions needed by this application.
 3. Configure a live Stripe webhook endpoint at `https://www.gitagentflow.com/api/webhooks/stripe` for `checkout.session.completed`, `checkout.session.async_payment_succeeded`, and `customer.subscription.created`, `customer.subscription.updated`, and `customer.subscription.deleted`. Save the endpoint's signing secret as `STRIPE_WEBHOOK_SECRET`.
 4. Configure the Stripe customer portal to allow customers to view invoices and manage/cancel subscriptions. Set the environment price IDs to the Pro and Team recurring USD monthly prices.
