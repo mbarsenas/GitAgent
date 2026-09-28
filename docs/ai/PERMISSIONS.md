@@ -6,6 +6,8 @@ GitAgent uses capability-based authorization for agents.
 
 - `repository.read`
 - `repository.write`
+- `repository.fetch`
+- `repository.push` (task branch only; no force-push or protected-branch push)
 - `branch.create`
 - `branch.delete`
 - `commit.create`
@@ -14,7 +16,7 @@ GitAgent uses capability-based authorization for agents.
 - `pr.read`
 - `pr.create`
 - `pr.review`
-- `pr.merge`
+- `pr.merge` (builder only with task/human authorization, independent approval of the exact head commit, passing required checks, and branch-protection compliance)
 - `test.execute`
 - `command.execute`
 - `network.egress`
@@ -37,7 +39,7 @@ No lower layer may expand permissions granted by a higher layer.
 
 ## Defaults
 
-Read-only repository access is the safest default. Write, merge, secret access, external network access, and production deployment should require explicit grants and may require human approval.
+Read-only repository access is the safest default. The builder's repository push grant is limited to its dedicated task branch. Merge, secret access, external network access, and production deployment require explicit grants. Builder merges additionally require independent approval of the exact head commit, passing required checks, and compliance with branch protection. Code-write or merge access does not grant production deployment access.
 
 ## Audit
 
