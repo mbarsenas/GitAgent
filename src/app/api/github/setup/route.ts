@@ -62,6 +62,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(target);
   } catch (error) {
     console.error('GET /api/github/setup failed', error);
+    if (error instanceof Error && error.message.startsWith('PLAN_REPOSITORY_LIMIT:')) {
+      return NextResponse.redirect(new URL('/settings/github?error=repository_limit', request.url));
+    }
     const signin = new URL('/signin', request.url);
     signin.searchParams.set('next', '/settings/github');
     return NextResponse.redirect(signin);

@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/db/prisma';
 import { getGitHubAppConfig } from './config';
 import { listInstallationRepositories } from './auth';
+import { assertRepositoryCapacity } from '@/lib/billing/entitlements';
 
 function agentSlug(prefix: string, repositoryId: string) {
   return `${prefix}-${repositoryId}`.toLowerCase().replace(/[^a-z0-9-]+/g, '-').slice(0, 120);
@@ -67,6 +68,10 @@ async function ensureRepositoryAgents(repositoryId: string) {
 export async function syncGitHubInstallationRepositories(userId: string, installationId: string) {
   const config = getGitHubAppConfig();
   const installation = await listInstallationRepositories(installationId);
+  const existingRepositories = await prisma.repository.findMany({ where: { userId, provider: 'github' }, select: { externalId: true } });
+  const existingIds = new Set(existingRepositories.map((repo) => repo.externalId));
+  const additionalRepositories = installation.repositories.filter((repo) => !existingIds.has(String(repo.id))).length;
+  await assertRepositoryCapacity(userId, additionalRepositories);
   const synced = [];
 
   for (const repo of installation.repositories) {

@@ -26,3 +26,17 @@ At minimum maintain local development, staging, and production environments. Pro
 ## Rollback
 
 Every production release must have a documented rollback strategy for application code and database migrations.
+
+## Stripe subscriptions
+
+For Vercel production deployments, the build runs `prisma migrate deploy` before generating the Prisma client and building Next.js. Preview and local builds skip production migrations. A failed migration stops the production build before the new application version is deployed. The billing migration is additive, so the current application remains compatible if a later build step fails.
+
+Before enabling paid checkout in production:
+
+1. Verify the production deployment completed the Prisma migration for `BillingSubscription` and `StripeWebhookEvent`.
+2. Add these production environment variables in the deployment secret manager (never commit their values): `STRIPE_SECRET_KEY`, `STRIPE_WEBHOOK_SECRET`, `STRIPE_PRICE_PRO`, `STRIPE_PRICE_TEAM`, and `NEXT_PUBLIC_APP_URL` (`https://www.gitagentflow.com`). Use a Stripe restricted API key with only the customer, price-read, subscription-read, Checkout Session, and Billing Portal permissions needed by this application.
+3. Configure a live Stripe webhook endpoint at `https://www.gitagentflow.com/api/webhooks/stripe` for `checkout.session.completed`, `checkout.session.async_payment_succeeded`, and `customer.subscription.created`, `customer.subscription.updated`, and `customer.subscription.deleted`. Save the endpoint's signing secret as `STRIPE_WEBHOOK_SECRET`.
+4. Configure the Stripe customer portal to allow customers to view invoices and manage/cancel subscriptions. Set the environment price IDs to the Pro and Team recurring USD monthly prices.
+5. Only after the migration, environment variables, webhook delivery, and portal are verified should the Pro and Team Stripe prices be activated. Checkout checks that each selected price is active and matches the published amount before opening a session.
+
+The application grants paid entitlements from verified subscription webhooks, not the Checkout return URL. Webhook retries are deduplicated by Stripe event ID. Until all required values are present and the prices are active, the pricing page keeps paid checkout unavailable. A subscription grants Pro/Team repository limits of 10/50; Preview allows one connected repository. Model-provider charges remain outside GitAgent billing.

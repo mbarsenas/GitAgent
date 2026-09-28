@@ -66,7 +66,8 @@ async function verifyReviewApp(owner: string, name: string) {
   }
 }
 
-export default async function GitHubConnectionPage() {
+export default async function GitHubConnectionPage({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
+  const query = await searchParams;
   let session;
   try {
     session = await requireCurrentUser();
@@ -108,6 +109,7 @@ export default async function GitHubConnectionPage() {
   return (
     <ControlPlaneShell active="/settings/github" title="GitHub App connection" subtitle={statusText}>
       <div className="settings-github-page">
+        {query.error === 'repository_limit' ? <div className="panel" role="alert" style={{ marginBottom: 12, padding: 14 }}>Your current plan does not include all repositories selected in GitHub. Review your <a href="/billing">billing plan</a>, then reduce the GitHub App repository selection or upgrade before syncing.</div> : null}
         <div className="section-head">
           <div>
             <p className="kicker">Settings / Integrations</p>

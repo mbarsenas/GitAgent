@@ -4,6 +4,7 @@ import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db/prisma';
 import { requireCurrentUser } from '@/lib/auth/current-user';
 import { createGovernedTask } from '@/lib/tasks/create-task';
+import { assertRepositoryEntitled } from '@/lib/billing/entitlements';
 
 export async function POST(request: Request) {
   try {
@@ -19,6 +20,7 @@ export async function POST(request: Request) {
     if (!repository || !agent || agent.status !== 'ACTIVE' || agent.repositoryId !== repository.id || agent.grants.length > 0) {
       return NextResponse.json({ error: 'Repository or agent not found for this account.' }, { status: 400 });
     }
+    await assertRepositoryEntitled(session.userId, repository.id);
 
     const owner = await prisma.user.findUnique({
       where: { id: session.userId },
@@ -50,9 +52,11 @@ export async function POST(request: Request) {
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     console.error('POST /api/tasks failed', error);
-    const status = message === 'UNAUTHENTICATED' ? 401 : message.startsWith('INVALID_TASK_') ? 400 : 500;
+    const planLimit = message.startsWith('PLAN_REPOSITORY_LIMIT:');
+    const status = message === 'UNAUTHENTICATED' ? 401 : message.startsWith('INVALID_TASK_') ? 400 : planLimit ? 403 : 500;
+    const planParts = planLimit ? message.split(':') : [];
     return NextResponse.json(
-      { error: status === 401 ? 'Sign in is required.' : status === 400 ? 'Check the task details, budget, and requested permissions.' : 'Unable to process this task request.', code: status === 401 ? 'unauthenticated' : 'task_creation_failed' },
+      { error: status === 401 ? 'Sign in is required.' : status === 400 ? 'Check the task details, budget, and requested permissions.' : planLimit ? `Your ${planParts[1]} plan includes up to ${planParts[2]} connected repositories. Upgrade your plan or use a repository within the plan limit.` : 'Unable to process this task request.', code: status === 401 ? 'unauthenticated' : planLimit ? 'plan_repository_limit' : 'task_creation_failed' },
       { status },
     );
   }
